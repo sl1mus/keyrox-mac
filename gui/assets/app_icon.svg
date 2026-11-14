@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background squircle gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242834"/>
+      <stop offset="50%" stop-color="#181a22"/>
+      <stop offset="100%" stop-color="#0f1015"/>
+    </linearGradient>
+
+    <!-- Subtle rim highlight -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#555f75" stop-opacity="0.9"/>
+      <stop offset="25%" stop-color="#343b4b" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#15171e" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Keyboard body gradient -->
+    <linearGradient id="kbBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2e3444"/>
+      <stop offset="100%" stop-color="#1b1d24"/>
+    </linearGradient>
+
+    <!-- Red/Orange RGB Neon Gradient -->
+    <linearGradient id="neonGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff3b30"/>
+      <stop offset="100%" stop-color="#ff9500"/>
+    </linearGradient>
+
+    <!-- Cyan Accent Glow -->
+    <linearGradient id="cyanGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#2979ff"/>
+    </linearGradient>
+
+    <!-- Soft dropshadow for keyboard -->
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+
+    <filter id="kbGlow" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Base Squircle (macOS rounded rect 824x824 at (100,100), rx=185) -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bgGrad)" stroke="url(#rimGrad)" stroke-width="6"/>
+
+  <!-- Subtle ambient radial lighting behind keyboard -->
+  <circle cx="512" cy="480" r="320" fill="#ff3b30" opacity="0.12"/>
+  <circle cx="512" cy="480" r="180" fill="#ff9500" opacity="0.08"/>
+
+  <!-- Keyboard Chassis -->
+  <g filter="url(#dropShadow)">
+    <rect x="190" y="270" width="644" height="484" rx="42" fill="url(#kbBody)" stroke="#3f475a" stroke-width="4"/>
+    
+    <!-- Recessed switch plate -->
+    <rect x="216" y="296" width="592" height="432" rx="30" fill="#13151c" stroke="#262c38" stroke-width="2"/>
+
+    <!-- ROW 1: Function Row -->
+    <rect x="246" y="324" width="64" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="330" y="324" width="64" height="54" rx="12" fill="#323847"/>
+    <rect x="414" y="324" width="64" height="54" rx="12" fill="#323847"/>
+    <rect x="498" y="324" width="64" height="54" rx="12" fill="#323847"/>
+    <rect x="582" y="324" width="64" height="54" rx="12" fill="#323847"/>
+    <rect x="666" y="324" width="64" height="54" rx="12" fill="url(#cyanGlow)"/>
+    <rect x="746" y="324" width="38" height="54" rx="12" fill="#323847"/>
+
+    <!-- ROW 2: Numbers / QWERTY -->
+    <rect x="246" y="398" width="80" height="54" rx="12" fill="#323847"/>
+    <rect x="344" y="398" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="426" y="398" width="64" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="508" y="398" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="590" y="398" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="672" y="398" width="112" height="54" rx="12" fill="#323847"/>
+
+    <!-- ROW 3: Home row (ASDF + Enter) -->
+    <rect x="246" y="472" width="94" height="54" rx="12" fill="#323847"/>
+    <rect x="358" y="472" width="64" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="440" y="472" width="64" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="522" y="472" width="64" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="604" y="472" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="686" y="472" width="98" height="54" rx="12" fill="url(#cyanGlow)"/>
+
+    <!-- ROW 4: Shift row (ZXCV + Arrows) -->
+    <rect x="246" y="546" width="120" height="54" rx="12" fill="#323847"/>
+    <rect x="384" y="546" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="466" y="546" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="548" y="546" width="64" height="54" rx="12" fill="#424a5d"/>
+    <rect x="630" y="546" width="86" height="54" rx="12" fill="#323847"/>
+    <rect x="732" y="546" width="52" height="54" rx="12" fill="url(#neonGlow)"/>
+
+    <!-- ROW 5: Bottom row (Modifiers, Spacebar, Nav) -->
+    <rect x="246" y="620" width="66" height="54" rx="12" fill="#323847"/>
+    <rect x="330" y="620" width="66" height="54" rx="12" fill="#323847"/>
+    <rect x="414" y="620" width="232" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="664" y="620" width="54" height="54" rx="12" fill="url(#neonGlow)"/>
+    <rect x="732" y="620" width="52" height="54" rx="12" fill="url(#neonGlow)"/>
+
+    <!-- Underglow Accent Neon Strip -->
+    <rect x="256" y="704" width="512" height="8" rx="4" fill="url(#neonGlow)" opacity="0.9"/>
+  </g>
+</svg>

@@ -43,7 +43,7 @@
 
 ### 2. Сборка и установка графического приложения
 ```bash
-git clone https://github.com/<your-username>/keyrox-mac.git
+git clone https://github.com/sl1mus/keyrox-mac.git
 cd keyrox-mac
 
 # Сборка и установка в /Applications/Keyrox.app

@@ -767,7 +767,7 @@
   });
 
   document.getElementById('btn-open-github-ui')?.addEventListener('click', () => {
-    sendToNative({ action: 'openUrl', url: 'https://github.com/kistenev/keyrox-mac' });
+    sendToNative({ action: 'openUrl', url: 'https://github.com/sl1mus/keyrox-mac' });
   });
 
   document.getElementById('btn-show-about-ui')?.addEventListener('click', () => {

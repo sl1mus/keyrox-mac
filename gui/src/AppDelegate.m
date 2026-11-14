@@ -622,7 +622,7 @@
                             @"Разработчик: keyrox-mac contributors\n"
                             @"Чистый реверс-инжиниринг USB HID протокола чипа ITE GK8911M.\n"
                             @"Открытый исходный код • MIT License (2026)\n\n"
-                            @"GitHub: https://github.com/kistenev/keyrox-mac";
+                            @"GitHub: https://github.com/sl1mus/keyrox-mac";
     
     NSAttributedString *credits = [[NSAttributedString alloc] initWithString:creditsText
                                                                   attributes:@{
@@ -645,7 +645,7 @@
     (void)sender;
     [self sendJSEvent:@"onToastMessage" data:@{@"message": @"🔍 Проверка обновлений на GitHub..."}];
 
-    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/kistenev/keyrox-mac/releases/latest"];
+    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/sl1mus/keyrox-mac/releases/latest"];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     [req setValue:@"application/vnd.github.v3+json" forHTTPHeaderField:@"Accept"];
     [req setValue:@"Keyrox-macOS-App" forHTTPHeaderField:@"User-Agent"];
@@ -658,12 +658,12 @@
                 NSAlert *alert = [[NSAlert alloc] init];
                 alert.messageText = @"Проверка обновлений Keyrox";
                 alert.informativeText = @"Установлена актуальная версия: v1.0.0 (macOS Universal ARM64/x86_64).\n\n"
-                                         @"Репозиторий проекта: github.com/kistenev/keyrox-mac\n"
+                                         @"Репозиторий проекта: github.com/sl1mus/keyrox-mac\n"
                                          @"Вы можете открыть страницу релизов на GitHub для просмотра истории и новостей.";
                 [alert addButtonWithTitle:@"Открыть GitHub Релизы"];
                 [alert addButtonWithTitle:@"Закрыть"];
                 if ([alert runModal] == NSAlertFirstButtonReturn) {
-                    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac/releases"]];
+                    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/sl1mus/keyrox-mac/releases"]];
                 }
                 return;
             }
@@ -672,7 +672,7 @@
                 NSError *jsonErr = nil;
                 NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonErr];
                 NSString *latestTag = json[@"tag_name"] ?: @"";
-                NSString *htmlUrl = json[@"html_url"] ?: @"https://github.com/kistenev/keyrox-mac/releases";
+                NSString *htmlUrl = json[@"html_url"] ?: @"https://github.com/sl1mus/keyrox-mac/releases";
                 NSString *releaseName = json[@"name"] ?: latestTag;
 
                 NSString *currentVer = @"v1.0.0";
@@ -734,12 +734,12 @@
 
 - (void)openGitHubPage:(id)sender {
     (void)sender;
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac"]];
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/sl1mus/keyrox-mac"]];
 }
 
 - (void)openGitHubIssues:(id)sender {
     (void)sender;
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac/issues"]];
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/sl1mus/keyrox-mac/issues"]];
 }
 
 @end
