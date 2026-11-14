@@ -13,13 +13,19 @@ RESOURCES_DIR = $(CONTENTS)/Resources
 C_SRCS = ../keyrox_hid.c ../keyrox_proto.c
 OBJC_SRCS = src/main.m src/AppDelegate.m ../keyrox_reset.m
 
+ARCH_FLAGS ?=
+
 all: $(APP_BUNDLE)
+
+universal:
+	$(MAKE) clean
+	$(MAKE) ARCH_FLAGS="-arch arm64 -arch x86_64"
 
 $(APP_BUNDLE): $(C_SRCS) $(OBJC_SRCS) Info.plist
 	@echo "===> Creating App Bundle structure..."
 	@mkdir -p $(MACOS_DIR) $(RESOURCES_DIR)/ui/assets
 	@echo "===> Compiling Mach-O executable..."
-	$(CC) $(OBJCFLAGS) -I.. $(FRAMEWORKS) $(C_SRCS) $(OBJC_SRCS) -o $(MACOS_DIR)/$(APP_NAME)
+	$(CC) $(ARCH_FLAGS) $(OBJCFLAGS) -I.. $(FRAMEWORKS) $(C_SRCS) $(OBJC_SRCS) -o $(MACOS_DIR)/$(APP_NAME)
 	@echo "===> Copying Info.plist and Icons..."
 	@cp Info.plist $(CONTENTS)/Info.plist
 	@cp assets/Keyrox.icns $(RESOURCES_DIR)/Keyrox.icns
@@ -33,6 +39,13 @@ $(APP_BUNDLE): $(C_SRCS) $(OBJC_SRCS) Info.plist
 	@codesign --force --deep --sign - $(APP_BUNDLE)
 	@echo "===> Successfully built $(APP_BUNDLE)!"
 
+package: universal
+	@echo "===> Packaging DMG..."
+	@mkdir -p $(BUILD_DIR)/dist
+	@rm -f $(BUILD_DIR)/dist/$(APP_NAME)-macOS.dmg
+	@hdiutil create -volname "$(APP_NAME)" -srcfolder "$(APP_BUNDLE)" -ov -format UDZO "$(BUILD_DIR)/dist/$(APP_NAME)-macOS.dmg"
+	@echo "===> DMG created at $(BUILD_DIR)/dist/$(APP_NAME)-macOS.dmg"
+
 install: $(APP_BUNDLE)
 	@echo "===> Installing to /Applications..."
 	@rm -rf /Applications/$(APP_NAME).app
@@ -45,4 +58,4 @@ clean:
 run: $(APP_BUNDLE)
 	open $(APP_BUNDLE)
 
-.PHONY: all clean install run
+.PHONY: all clean install run universal package

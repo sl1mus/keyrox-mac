@@ -22,14 +22,17 @@ $(TARGET): $(OBJ)
 %.o: %.m
 	$(CC) $(OBJCFLAGS) -c $< -o $@
 
+universal:
+	$(CC) -arch arm64 -arch x86_64 $(CFLAGS) $(OBJCFLAGS) $(LDFLAGS) $(C_SRC) $(OBJC_SRC) -o $(TARGET)
+
 clean:
 	rm -f $(OBJ) $(TARGET)
 
 install: $(TARGET)
-	mkdir -p $(INSTALL_DIR) $(AGY_BIN_DIR)
+	mkdir -p $(INSTALL_DIR)
 	cp $(TARGET) $(INSTALL_DIR)/$(TARGET)
-	cp $(TARGET) $(AGY_BIN_DIR)/$(TARGET)
-	chmod +x $(INSTALL_DIR)/$(TARGET) $(AGY_BIN_DIR)/$(TARGET)
-	@echo "Installed $(TARGET) to $(INSTALL_DIR) and $(AGY_BIN_DIR)"
+	chmod +x $(INSTALL_DIR)/$(TARGET)
+	@if [ -d "$(AGY_BIN_DIR)" ]; then cp $(TARGET) $(AGY_BIN_DIR)/$(TARGET) && chmod +x $(AGY_BIN_DIR)/$(TARGET); fi
+	@echo "Installed $(TARGET) to $(INSTALL_DIR)"
 
-.PHONY: all clean install
+.PHONY: all clean install universal

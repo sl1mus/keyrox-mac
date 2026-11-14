@@ -81,8 +81,12 @@
     if (uiURL) {
         [self.webView loadFileURL:uiURL allowingReadAccessToURL:[[NSBundle mainBundle] resourceURL]];
     } else {
-        // Fallback to local dev path
-        NSString *localPath = @"/Users/kistenev/Documents/keyrox-ctl/gui/ui/index.html";
+        // Fallback to current working directory for development
+        NSString *cwd = [[NSFileManager defaultManager] currentDirectoryPath];
+        NSString *localPath = [cwd stringByAppendingPathComponent:@"gui/ui/index.html"];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:localPath]) {
+            localPath = [cwd stringByAppendingPathComponent:@"ui/index.html"];
+        }
         NSURL *localURL = [NSURL fileURLWithPath:localPath];
         [self.webView loadFileURL:localURL allowingReadAccessToURL:[localURL URLByDeletingLastPathComponent]];
     }
@@ -126,7 +130,13 @@
             CGImageRef cgImage = [snapshot CGImageForProposedRect:NULL context:nil hints:nil];
             NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:cgImage];
             NSData *pngData = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
-            NSString *path = [@"/Users/kistenev/.gemini/antigravity/brain/8d91cd01-189a-4e29-9f3c-88b55e2a295f/" stringByAppendingPathComponent:filename];
+            NSString *customDir = [[[NSProcessInfo processInfo] environment] objectForKey:@"KEYROX_SNAPSHOT_DIR"];
+            NSString *targetDir = customDir;
+            if (!targetDir || ![[NSFileManager defaultManager] fileExistsAtPath:targetDir]) {
+                NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDesktopDirectory, NSUserDomainMask, YES);
+                targetDir = paths.firstObject ?: NSTemporaryDirectory();
+            }
+            NSString *path = [targetDir stringByAppendingPathComponent:filename];
             [pngData writeToFile:path atomically:YES];
             NSLog(@"[Keyrox] Successfully saved UI snapshot to %@", path);
         } else {

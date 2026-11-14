@@ -12,6 +12,8 @@ dist/
 *.dmg
 *.zip
 
-# User profiles and caches
+# User profiles and local configs
 profiles.json
-swift-gui/build/
+.env
+.idea/
+.vscode/
