@@ -26,9 +26,12 @@ $(APP_BUNDLE): $(C_SRCS) $(OBJC_SRCS) Info.plist
 	@mkdir -p $(MACOS_DIR) $(RESOURCES_DIR)/ui/assets
 	@echo "===> Compiling Mach-O executable..."
 	$(CC) $(ARCH_FLAGS) $(OBJCFLAGS) -I.. $(FRAMEWORKS) $(C_SRCS) $(OBJC_SRCS) -o $(MACOS_DIR)/$(APP_NAME)
+	@echo "===> Compiling Watchdog daemon..."
+	$(CC) $(ARCH_FLAGS) $(OBJCFLAGS) -I.. $(FRAMEWORKS) ../daemon/keyrox-watchdog.m ../keyrox_reset.m $(C_SRCS) -o $(MACOS_DIR)/keyrox-watchdog
 	@echo "===> Copying Info.plist and Icons..."
 	@cp Info.plist $(CONTENTS)/Info.plist
 	@cp assets/Keyrox.icns $(RESOURCES_DIR)/Keyrox.icns
+	@cp ../daemon/io.github.sl1mus.keyrox-watchdog.plist $(RESOURCES_DIR)/
 	@echo "===> Copying WebKit UI resources..."
 	@cp ui/index.html $(RESOURCES_DIR)/ui/
 	@cp ui/style.css $(RESOURCES_DIR)/ui/

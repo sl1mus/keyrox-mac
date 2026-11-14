@@ -24,15 +24,20 @@ $(TARGET): $(OBJ)
 
 universal:
 	$(CC) -arch arm64 -arch x86_64 $(CFLAGS) $(OBJCFLAGS) $(LDFLAGS) $(C_SRC) $(OBJC_SRC) -o $(TARGET)
+	$(MAKE) -C daemon universal
 
 clean:
 	rm -f $(OBJ) $(TARGET)
+	$(MAKE) -C daemon clean
 
 install: $(TARGET)
+	$(MAKE) -C daemon universal
 	mkdir -p $(INSTALL_DIR)
 	cp $(TARGET) $(INSTALL_DIR)/$(TARGET)
 	chmod +x $(INSTALL_DIR)/$(TARGET)
-	@if [ -d "$(AGY_BIN_DIR)" ]; then cp $(TARGET) $(AGY_BIN_DIR)/$(TARGET) && chmod +x $(AGY_BIN_DIR)/$(TARGET); fi
-	@echo "Installed $(TARGET) to $(INSTALL_DIR)"
+	cp daemon/keyrox-watchdog $(INSTALL_DIR)/keyrox-watchdog
+	chmod +x $(INSTALL_DIR)/keyrox-watchdog
+	@if [ -d "$(AGY_BIN_DIR)" ]; then cp $(TARGET) $(AGY_BIN_DIR)/$(TARGET) && chmod +x $(AGY_BIN_DIR)/$(TARGET); cp daemon/keyrox-watchdog $(AGY_BIN_DIR)/keyrox-watchdog && chmod +x $(AGY_BIN_DIR)/keyrox-watchdog; fi
+	@echo "Installed $(TARGET) and keyrox-watchdog to $(INSTALL_DIR)"
 
 .PHONY: all clean install universal

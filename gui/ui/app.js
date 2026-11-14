@@ -774,6 +774,20 @@
     sendToNative({ action: 'showAbout' });
   });
 
+  // Watchdog Background Daemon Toggle
+  let watchdogInstalled = false;
+  let watchdogRunning = false;
+
+  document.getElementById('btn-toggle-watchdog')?.addEventListener('click', () => {
+    if (watchdogInstalled || watchdogRunning) {
+      showToast('Остановка и удаление фоновой службы...');
+      sendToNative({ action: 'uninstallWatchdog' });
+    } else {
+      showToast('Установка системного фонового Watchdog (24/7)...');
+      sendToNative({ action: 'installWatchdog' });
+    }
+  });
+
   // 10. Window Minimize, Maximize & Close
   document.getElementById('btn-minimize')?.addEventListener('click', () => {
     sendToNative({ action: 'minimizeWindow' });
@@ -940,6 +954,38 @@
     }
   };
 
+  window.onWatchdogStatus = function(status) {
+    if (!status) return;
+    watchdogInstalled = !!status.installed;
+    watchdogRunning = !!status.running;
+
+    const badge = document.getElementById('watchdog-state-badge');
+    const btnText = document.getElementById('btn-toggle-watchdog-text');
+    const infoWatchdog = document.getElementById('info-watchdog');
+
+    if (status.running || status.installed) {
+      if (badge) {
+        badge.textContent = status.pid ? `PID ${status.pid} (24/7)` : 'Служба активна (24/7)';
+        badge.className = 'info-val code text-green';
+      }
+      if (btnText) btnText.textContent = '⏹️ Отключить фоновую автозащиту';
+      if (infoWatchdog) {
+        infoWatchdog.textContent = 'In-App + Daemon (24/7)';
+        infoWatchdog.className = 'info-val status-active';
+      }
+    } else {
+      if (badge) {
+        badge.textContent = 'Только пока открыто окно';
+        badge.className = 'info-val code text-orange';
+      }
+      if (btnText) btnText.textContent = '🛡️ Включить автозащиту в фоне (24/7)';
+      if (infoWatchdog) {
+        infoWatchdog.textContent = 'Активен (In-App)';
+        infoWatchdog.className = 'info-val status-active';
+      }
+    }
+  };
+
   // Initialize
   renderKeyboard();
   updatePaletteUI();
@@ -949,5 +995,6 @@
   // Try to load profiles from disk and hardware status
   sendToNative({ action: 'loadProfilesFromFile' });
   sendToNative({ action: 'getStatus' });
+  sendToNative({ action: 'getWatchdogStatus' });
 
 })();

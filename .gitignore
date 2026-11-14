@@ -6,6 +6,7 @@
 # Build artifacts
 *.o
 keyrox-ctl
+daemon/keyrox-watchdog
 gui/build/
 build/
 dist/

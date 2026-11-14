@@ -11,4 +11,9 @@
 - (void)checkForUpdates:(id)sender;
 - (void)openSettingsTab:(id)sender;
 
+- (void)setupWakeWatchdog;
+- (void)checkWatchdogStatus;
+- (void)installWatchdogDaemon;
+- (void)uninstallWatchdogDaemon;
+
 @end

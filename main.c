@@ -18,7 +18,9 @@ static void print_usage(const char *prog) {
     printf("  %s on                        Turn backlight on (const mode)\n", prog);
     printf("  %s off                       Turn backlight off\n", prog);
     printf("  %s save                      Commit current configuration to Flash/EEPROM\n", prog);
-    printf("  %s watchdog                  Run watchdog keepalive loop (prevents sleep dropout)\n", prog);
+    printf("  %s watchdog                  Run foreground watchdog loop\n", prog);
+    printf("  %s install-daemon            Install 24/7 background sleep protection LaunchAgent\n", prog);
+    printf("  %s uninstall-daemon          Uninstall background sleep protection LaunchAgent\n", prog);
     printf("  %s modes                     List all supported lighting modes\n\n", prog);
     printf("Examples:\n");
     printf("  %s mode wave                 Set rainbow wave mode\n", prog);
@@ -97,6 +99,107 @@ int main(int argc, char *argv[]) {
         } else {
             printf("[!] USB Bus Reset issued. macOS HID driver re-enumerating (test typing now).\n");
         }
+        return 0;
+    }
+
+    if (strcmp(cmd, "install-daemon") == 0) {
+        printf("[*] Installing Keyrox Watchdog LaunchAgent (24/7 background sleep protection)...\n");
+        const char *home = getenv("HOME");
+        if (!home) return 1;
+
+        char app_support[512];
+        snprintf(app_support, sizeof(app_support), "%s/Library/Application Support/Keyrox", home);
+        char cmd_mkdir[1024];
+        snprintf(cmd_mkdir, sizeof(cmd_mkdir), "mkdir -p '%s' '%s/Library/LaunchAgents' '%s/Library/Logs'", app_support, home, home);
+        system(cmd_mkdir);
+
+        char target_bin[512];
+        snprintf(target_bin, sizeof(target_bin), "%s/keyrox-watchdog", app_support);
+        
+        char cp_cmd[1024];
+        snprintf(cp_cmd, sizeof(cp_cmd),
+            "if [ -f '/Applications/Keyrox.app/Contents/MacOS/keyrox-watchdog' ]; then "
+            "  cp '/Applications/Keyrox.app/Contents/MacOS/keyrox-watchdog' '%s'; "
+            "elif [ -f '%s/.local/bin/keyrox-watchdog' ]; then "
+            "  cp '%s/.local/bin/keyrox-watchdog' '%s'; "
+            "elif [ -f 'daemon/keyrox-watchdog' ]; then "
+            "  cp 'daemon/keyrox-watchdog' '%s'; "
+            "fi; chmod +x '%s'",
+            target_bin, home, home, target_bin, target_bin, target_bin);
+        system(cp_cmd);
+
+        if (access(target_bin, X_OK) != 0) {
+            fprintf(stderr, "[-] Could not find executable keyrox-watchdog to install.\n");
+            return 1;
+        }
+
+        char plist_path[512];
+        snprintf(plist_path, sizeof(plist_path), "%s/Library/LaunchAgents/io.github.sl1mus.keyrox-watchdog.plist", home);
+        char log_path[512];
+        snprintf(log_path, sizeof(log_path), "%s/Library/Logs/keyrox-watchdog.log", home);
+
+        FILE *f = fopen(plist_path, "w");
+        if (!f) {
+            perror("[-] Failed to create plist file");
+            return 1;
+        }
+        fprintf(f,
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+            "<plist version=\"1.0\">\n"
+            "<dict>\n"
+            "    <key>Label</key>\n"
+            "    <string>io.github.sl1mus.keyrox-watchdog</string>\n"
+            "    <key>ProgramArguments</key>\n"
+            "    <array>\n"
+            "        <string>%s</string>\n"
+            "    </array>\n"
+            "    <key>RunAtLoad</key>\n"
+            "    <true/>\n"
+            "    <key>KeepAlive</key>\n"
+            "    <true/>\n"
+            "    <key>ProcessType</key>\n"
+            "    <string>Background</string>\n"
+            "    <key>StandardOutPath</key>\n"
+            "    <string>%s</string>\n"
+            "    <key>StandardErrorPath</key>\n"
+            "    <string>%s</string>\n"
+            "</dict>\n"
+            "</plist>\n",
+            target_bin, log_path, log_path);
+        fclose(f);
+
+        char load_cmd[2048];
+        snprintf(load_cmd, sizeof(load_cmd),
+            "launchctl unload '%s/Library/LaunchAgents/com.kistenev.juchen-keepalive.plist' 2>/dev/null; "
+            "rm -f '%s/Library/LaunchAgents/com.kistenev.juchen-keepalive.plist'; "
+            "launchctl unload '%s' 2>/dev/null; "
+            "launchctl load -w '%s'",
+            home, home, plist_path, plist_path);
+        int ret = system(load_cmd);
+        if (ret == 0) {
+            printf("[+] Keyrox Watchdog LaunchAgent installed and loaded successfully!\n");
+            printf("    Binary:   %s\n", target_bin);
+            printf("    Log file: %s\n", log_path);
+        } else {
+            fprintf(stderr, "[-] Failed to load LaunchAgent via launchctl.\n");
+        }
+        return ret;
+    }
+
+    if (strcmp(cmd, "uninstall-daemon") == 0) {
+        printf("[*] Uninstalling Keyrox Watchdog LaunchAgent...\n");
+        const char *home = getenv("HOME");
+        if (!home) return 1;
+        char cmd_buf[1024];
+        snprintf(cmd_buf, sizeof(cmd_buf),
+            "launchctl unload -w '%s/Library/LaunchAgents/io.github.sl1mus.keyrox-watchdog.plist' 2>/dev/null; "
+            "rm -f '%s/Library/LaunchAgents/io.github.sl1mus.keyrox-watchdog.plist'; "
+            "launchctl unload -w '%s/Library/LaunchAgents/com.kistenev.juchen-keepalive.plist' 2>/dev/null; "
+            "rm -f '%s/Library/LaunchAgents/com.kistenev.juchen-keepalive.plist'",
+            home, home, home, home);
+        system(cmd_buf);
+        printf("[+] Keyrox Watchdog LaunchAgent removed from system startup.\n");
         return 0;
     }
 

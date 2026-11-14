@@ -517,7 +517,18 @@
               <button class="btn btn-secondary" id="btn-import-profiles">📥 Импортировать из файла (.json)...</button>
               <button class="btn btn-secondary" id="btn-reveal-finder">📂 Показать профили в Finder</button>
             </div>
-            <div class="card-footer-info">
+            <div class="app-quick-actions" style="display: flex; gap: 6px; margin-top: 10px;">
+              <button class="btn btn-secondary btn-sm flex-1" id="btn-check-updates-ui" title="Проверить обновления на GitHub">
+                🔄 Обновления
+              </button>
+              <button class="btn btn-secondary btn-sm flex-1" id="btn-open-github-ui" title="Репозиторий проекта на GitHub">
+                🐙 GitHub
+              </button>
+              <button class="btn btn-secondary btn-sm flex-1" id="btn-show-about-ui" title="О программе Keyrox">
+                ℹ️ Инфо
+              </button>
+            </div>
+            <div class="card-footer-info" style="margin-top: auto;">
               <span class="footer-info-key">Файл профилей:</span>
               <span class="footer-info-val code text-green" title="~/Library/Application Support/Keyrox/profiles.json">~/Library/.../profiles.json</span>
             </div>
@@ -569,22 +580,22 @@
                 <span class="info-val code" id="info-fw-version">GK8911M-DP-V0045</span>
               </div>
               <div class="info-item">
-                <span class="info-key">Служба Watchdog</span>
-                <span class="info-val status-active" id="info-watchdog">Активен (keepalive)</span>
+                <span class="info-key">Автозащита от зависания</span>
+                <span class="info-val status-active" id="info-watchdog">Активен (In-App)</span>
               </div>
             </div>
-            <div class="app-quick-actions" style="display: flex; gap: 6px; margin-top: 12px;">
-              <button class="btn btn-secondary btn-sm flex-1" id="btn-check-updates-ui" title="Проверить обновления на GitHub">
-                🔄 Обновления
-              </button>
-              <button class="btn btn-secondary btn-sm flex-1" id="btn-open-github-ui" title="Репозиторий проекта на GitHub">
-                🐙 GitHub
-              </button>
-              <button class="btn btn-secondary btn-sm flex-1" id="btn-show-about-ui" title="О программе Keyrox">
-                ℹ️ О программе
+
+            <!-- Watchdog 24/7 background control box -->
+            <div class="watchdog-box" style="margin-top: 10px; padding: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 600; color: #e0e4ec;">🛡️ Фоновый Watchdog (24/7)</span>
+                <span class="info-val code text-green" id="watchdog-state-badge" style="font-size: 9.5px;">Автозащита вкл</span>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btn-toggle-watchdog" style="width: 100%; justify-content: center; gap: 6px; height: 28px; font-size: 11px;">
+                <span id="btn-toggle-watchdog-text">🛡️ Включить автозащиту в фоне</span>
               </button>
             </div>
-            <div class="card-footer-info" style="margin-top: 10px;">
+            <div class="card-footer-info" style="margin-top: auto;">
               <span class="footer-info-key">USB Порт:</span>
               <span class="footer-info-val code text-blue">0x14200000 (Port 2)</span>
             </div>

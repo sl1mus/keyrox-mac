@@ -1,5 +1,6 @@
 #import "AppDelegate.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#include <sys/stat.h>
 #include "keyrox_reset.h"
 
 @interface TitleBarDragView : NSView
@@ -168,8 +169,8 @@
 
     [self setupMainMenu];
 
-    // Window Setup (1080x750 borderless, resizable with custom drag area)
-    NSRect frame = NSMakeRect(0, 0, 1080, 750);
+    // Window Setup (1080x810 borderless, resizable with custom drag area)
+    NSRect frame = NSMakeRect(0, 0, 1080, 810);
     NSUInteger styleMask = NSWindowStyleMaskTitled | 
                            NSWindowStyleMaskClosable | 
                            NSWindowStyleMaskMiniaturizable | 
@@ -181,7 +182,7 @@
                                                 backing:NSBackingStoreBuffered
                                                   defer:NO];
 
-    self.window.minSize = NSMakeSize(1000, 700);
+    self.window.minSize = NSMakeSize(1000, 750);
 
     self.window.title = @"Red Square Keyrox TKL";
     self.window.titlebarAppearsTransparent = YES;
@@ -243,6 +244,8 @@
     
     // Initial check right away
     [self checkDeviceStatus];
+    [self setupWakeWatchdog];
+    [self checkWatchdogStatus];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
@@ -276,7 +279,7 @@
                 NSString *js = [NSString stringWithFormat:@"document.querySelector('.tab-btn[data-tab=\"%@\"]').click();", tab];
                 [self.webView evaluateJavaScript:js completionHandler:nil];
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    [self captureSnapshot:[NSString stringWithFormat:@"keyrox_tab_%@_v2_1.png", tab]];
+                    [self captureSnapshot:[NSString stringWithFormat:@"keyrox_tab_%@_v2_2.png", tab]];
                 });
             });
         }
@@ -417,6 +420,18 @@
                 [self sendJSEvent:@"onToastMessage" data:@{@"message": @"⚡ Шина USB перезапущена, клавиатура реанимирована!"}];
             });
         });
+        return;
+    }
+    if ([action isEqualToString:@"getWatchdogStatus"]) {
+        [self checkWatchdogStatus];
+        return;
+    }
+    if ([action isEqualToString:@"installWatchdog"]) {
+        [self installWatchdogDaemon];
+        return;
+    }
+    if ([action isEqualToString:@"uninstallWatchdog"]) {
+        [self uninstallWatchdogDaemon];
         return;
     }
     if ([action isEqualToString:@"takeSnapshot"]) {
@@ -740,6 +755,189 @@
 - (void)openGitHubIssues:(id)sender {
     (void)sender;
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/sl1mus/keyrox-mac/issues"]];
+}
+
+#pragma mark - Automatic Wake Watchdog & Daemon Manager
+
+- (void)setupWakeWatchdog {
+    NSNotificationCenter *wsCenter = [[NSWorkspace sharedWorkspace] notificationCenter];
+
+    [wsCenter addObserverForName:NSWorkspaceScreensDidWakeNotification
+                          object:nil
+                           queue:[NSOperationQueue mainQueue]
+                      usingBlock:^(NSNotification *note) {
+        (void)note;
+        NSLog(@"[Keyrox Watchdog] Display woke up (NSWorkspaceScreensDidWakeNotification)!");
+        [self autoReviveOnWake:@"Пробуждение дисплея"];
+    }];
+
+    [wsCenter addObserverForName:NSWorkspaceDidWakeNotification
+                          object:nil
+                           queue:[NSOperationQueue mainQueue]
+                      usingBlock:^(NSNotification *note) {
+        (void)note;
+        NSLog(@"[Keyrox Watchdog] System woke up (NSWorkspaceDidWakeNotification)!");
+        [self autoReviveOnWake:@"Выход Mac из сна"];
+    }];
+}
+
+- (void)autoReviveOnWake:(NSString *)reason {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+        int rc = keyrox_usb_bus_reset();
+        NSLog(@"[Keyrox Watchdog] Auto-Revive triggered (%@), reset result = %d", reason, rc);
+        usleep(600000);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self checkDeviceStatus];
+            [self sendJSEvent:@"onToastMessage" data:@{
+                @"message": [NSString stringWithFormat:@"⚡ Клавиатура автоматически реанимирована (%@)!", reason]
+            }];
+        });
+    });
+}
+
+- (void)checkWatchdogStatus {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *home = NSHomeDirectory();
+        NSString *plistPath = [home stringByAppendingPathComponent:@"Library/LaunchAgents/io.github.sl1mus.keyrox-watchdog.plist"];
+        BOOL plistExists = [[NSFileManager defaultManager] fileExistsAtPath:plistPath];
+
+        NSTask *task = [[NSTask alloc] init];
+        task.launchPath = @"/bin/sh";
+        task.arguments = @[@"-c", @"launchctl list | grep -E '(keyrox-watchdog|juchen-keepalive)' || true"];
+        NSPipe *pipe = [NSPipe pipe];
+        task.standardOutput = pipe;
+        [task launch];
+        [task waitUntilExit];
+
+        NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+        NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+
+        BOOL isRunning = NO;
+        int pid = 0;
+        if (output && output.length > 0) {
+            NSArray *lines = [output componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+            for (NSString *line in lines) {
+                if (line.length > 0) {
+                    NSArray *parts = [line componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    NSMutableArray *cleanParts = [NSMutableArray array];
+                    for (NSString *p in parts) {
+                        if (p.length > 0) [cleanParts addObject:p];
+                    }
+                    if (cleanParts.count >= 3) {
+                        NSString *pidStr = cleanParts[0];
+                        if (![pidStr isEqualToString:@"-"]) {
+                            pid = [pidStr intValue];
+                            isRunning = YES;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self sendJSEvent:@"onWatchdogStatus" data:@{
+                @"installed": @(plistExists),
+                @"running": @(isRunning),
+                @"pid": @(pid)
+            }];
+        });
+    });
+}
+
+- (void)installWatchdogDaemon {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *home = NSHomeDirectory();
+        NSString *appSupport = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *keyroxDir = [appSupport stringByAppendingPathComponent:@"Keyrox"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:keyroxDir withIntermediateDirectories:YES attributes:nil error:nil];
+
+        NSString *targetBinary = [keyroxDir stringByAppendingPathComponent:@"keyrox-watchdog"];
+
+        // Look for bundled keyrox-watchdog inside app bundle
+        NSString *bundledBinary = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"keyrox-watchdog"];
+        if (!bundledBinary || ![[NSFileManager defaultManager] fileExistsAtPath:bundledBinary]) {
+            bundledBinary = [[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:@"Contents/MacOS/keyrox-watchdog"];
+        }
+
+        if ([[NSFileManager defaultManager] fileExistsAtPath:bundledBinary]) {
+            [[NSFileManager defaultManager] removeItemAtPath:targetBinary error:nil];
+            [[NSFileManager defaultManager] copyItemAtPath:bundledBinary toPath:targetBinary error:nil];
+        }
+
+        chmod(targetBinary.UTF8String, 0755);
+
+        NSString *launchAgentsDir = [home stringByAppendingPathComponent:@"Library/LaunchAgents"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:launchAgentsDir withIntermediateDirectories:YES attributes:nil error:nil];
+
+        NSString *plistPath = [launchAgentsDir stringByAppendingPathComponent:@"io.github.sl1mus.keyrox-watchdog.plist"];
+        NSString *logPath = [home stringByAppendingPathComponent:@"Library/Logs/keyrox-watchdog.log"];
+
+        NSString *plistContent = [NSString stringWithFormat:
+            @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            @"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+            @"<plist version=\"1.0\">\n"
+            @"<dict>\n"
+            @"    <key>Label</key>\n"
+            @"    <string>io.github.sl1mus.keyrox-watchdog</string>\n"
+            @"    <key>ProgramArguments</key>\n"
+            @"    <array>\n"
+            @"        <string>%@</string>\n"
+            @"    </array>\n"
+            @"    <key>RunAtLoad</key>\n"
+            @"    <true/>\n"
+            @"    <key>KeepAlive</key>\n"
+            @"    <true/>\n"
+            @"    <key>ProcessType</key>\n"
+            @"    <string>Background</string>\n"
+            @"    <key>StandardOutPath</key>\n"
+            @"    <string>%@</string>\n"
+            @"    <key>StandardErrorPath</key>\n"
+            @"    <string>%@</string>\n"
+            @"</dict>\n"
+            @"</plist>\n", targetBinary, logPath, logPath];
+
+        [plistContent writeToFile:plistPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+        // Clean up legacy prototype
+        NSString *oldPlist = [launchAgentsDir stringByAppendingPathComponent:@"com.kistenev.juchen-keepalive.plist"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:oldPlist]) {
+            NSString *unloadOldCmd = [NSString stringWithFormat:@"launchctl unload \"%@\" 2>/dev/null; rm -f \"%@\"", oldPlist, oldPlist];
+            system(unloadOldCmd.UTF8String);
+        }
+
+        // Load new watchdog daemon
+        NSString *loadCmd = [NSString stringWithFormat:@"launchctl unload \"%@\" 2>/dev/null; launchctl load -w \"%@\"", plistPath, plistPath];
+        system(loadCmd.UTF8String);
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self sendJSEvent:@"onToastMessage" data:@{
+                @"message": @"🛡️ Фоновый Watchdog (24/7) успешно установлен и запущен!"
+            }];
+            [self checkWatchdogStatus];
+        });
+    });
+}
+
+- (void)uninstallWatchdogDaemon {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *home = NSHomeDirectory();
+        NSString *plistPath = [home stringByAppendingPathComponent:@"Library/LaunchAgents/io.github.sl1mus.keyrox-watchdog.plist"];
+        NSString *oldPlist = [home stringByAppendingPathComponent:@"Library/LaunchAgents/com.kistenev.juchen-keepalive.plist"];
+
+        NSString *cmd = [NSString stringWithFormat:
+            @"launchctl unload -w \"%@\" 2>/dev/null; rm -f \"%@\"; "
+            @"launchctl unload -w \"%@\" 2>/dev/null; rm -f \"%@\"",
+            plistPath, plistPath, oldPlist, oldPlist];
+        system(cmd.UTF8String);
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self sendJSEvent:@"onToastMessage" data:@{
+                @"message": @"⏹️ Фоновый Watchdog остановлен и удален из автозагрузки"
+            }];
+            [self checkWatchdogStatus];
+        });
+    });
 }
 
 @end
