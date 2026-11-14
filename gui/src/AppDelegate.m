@@ -7,7 +7,11 @@
 
 @implementation TitleBarDragView
 - (void)mouseDown:(NSEvent *)event {
-    [self.window performWindowDragWithEvent:event];
+    if (event.clickCount == 2) {
+        [self.window zoom:nil];
+    } else {
+        [self.window performWindowDragWithEvent:event];
+    }
 }
 - (BOOL)mouseDownCanMoveWindow {
     return YES;
@@ -31,17 +35,20 @@
     _hidQueue = dispatch_queue_create("org.redsquare.keyrox.hid", DISPATCH_QUEUE_SERIAL);
     _lastConnected = NO;
 
-    // Window Setup (1024x680 borderless with custom drag area)
-    NSRect frame = NSMakeRect(0, 0, 1024, 680);
+    // Window Setup (1080x750 borderless, resizable with custom drag area)
+    NSRect frame = NSMakeRect(0, 0, 1080, 750);
     NSUInteger styleMask = NSWindowStyleMaskTitled | 
                            NSWindowStyleMaskClosable | 
                            NSWindowStyleMaskMiniaturizable | 
+                           NSWindowStyleMaskResizable |
                            NSWindowStyleMaskFullSizeContentView;
 
     self.window = [[NSWindow alloc] initWithContentRect:frame
                                               styleMask:styleMask
                                                 backing:NSBackingStoreBuffered
                                                   defer:NO];
+
+    self.window.minSize = NSMakeSize(1000, 700);
 
     self.window.title = @"Red Square Keyrox TKL";
     self.window.titlebarAppearsTransparent = YES;
@@ -70,8 +77,8 @@
 
     [self.window.contentView addSubview:self.webView];
 
-    // Add native titlebar drag overlay (leaving right 80px for minimize and close buttons)
-    NSRect dragFrame = NSMakeRect(0, self.window.contentView.bounds.size.height - 34, self.window.contentView.bounds.size.width - 80, 34);
+    // Add native titlebar drag overlay (leaving right 112px for minimize, maximize and close buttons)
+    NSRect dragFrame = NSMakeRect(0, self.window.contentView.bounds.size.height - 34, self.window.contentView.bounds.size.width - 112, 34);
     TitleBarDragView *dragView = [[TitleBarDragView alloc] initWithFrame:dragFrame];
     dragView.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
     [self.window.contentView addSubview:dragView positioned:NSWindowAbove relativeTo:self.webView];
@@ -121,6 +128,26 @@
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     NSLog(@"[Keyrox] Web view loaded successfully.");
+    NSString *snapName = [[[NSProcessInfo processInfo] environment] objectForKey:@"KEYROX_AUTO_SNAPSHOT"];
+    if (snapName) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self captureSnapshot:snapName];
+        });
+    }
+
+    if ([[[NSProcessInfo processInfo] environment] objectForKey:@"KEYROX_AUTO_SNAPSHOT_ALL"]) {
+        NSArray *tabs = @[@"led", @"remap", @"custom", @"settings"];
+        for (NSUInteger i = 0; i < tabs.count; i++) {
+            NSString *tab = tabs[i];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((1.0 + i * 0.8) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                NSString *js = [NSString stringWithFormat:@"document.querySelector('.tab-btn[data-tab=\"%@\"]').click();", tab];
+                [self.webView evaluateJavaScript:js completionHandler:nil];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [self captureSnapshot:[NSString stringWithFormat:@"keyrox_tab_%@_v2_0.png", tab]];
+                });
+            });
+        }
+    }
 }
 
 - (void)captureSnapshot:(NSString *)filename {
@@ -223,6 +250,10 @@
     }
     if ([action isEqualToString:@"minimizeWindow"]) {
         [self.window miniaturize:nil];
+        return;
+    }
+    if ([action isEqualToString:@"maximizeWindow"] || [action isEqualToString:@"zoomWindow"]) {
+        [self.window zoom:nil];
         return;
     }
     if ([action isEqualToString:@"openUrl"]) {

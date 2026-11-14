@@ -761,9 +761,13 @@
     sendToNative({ action: 'revealProfilesInFinder' });
   });
 
-  // 10. Window Minimize & Close
+  // 10. Window Minimize, Maximize & Close
   document.getElementById('btn-minimize')?.addEventListener('click', () => {
     sendToNative({ action: 'minimizeWindow' });
+  });
+
+  document.getElementById('btn-maximize')?.addEventListener('click', () => {
+    sendToNative({ action: 'maximizeWindow' });
   });
 
   document.getElementById('btn-close')?.addEventListener('click', () => {
