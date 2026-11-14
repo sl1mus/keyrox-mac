@@ -43,15 +43,20 @@
       </div>
 
       <div class="profile-selector">
-        <span class="profile-label">Профиль:</span>
-        <div class="profile-pills">
-          <button class="profile-btn active" data-profile="0">P1</button>
-          <button class="profile-btn" data-profile="1">P2</button>
-          <button class="profile-btn" data-profile="2">P3</button>
-          <button class="profile-btn" data-profile="3">P4</button>
+        <div class="profile-group">
+          <span class="profile-label">Профиль:</span>
+          <div class="profile-pills">
+            <button class="profile-btn active" data-profile="0">P1</button>
+            <button class="profile-btn" data-profile="1">P2</button>
+            <button class="profile-btn" data-profile="2">P3</button>
+            <button class="profile-btn" data-profile="3">P4</button>
+          </div>
         </div>
-        <button class="btn-load-profile" id="btn-load-current-profile" title="Считать текущий активный профиль и настройки с клавиатуры">📥 Загрузить настройки</button>
-        <button class="btn-save-profile" id="btn-save-current-profile" title="Сохранить текущий профиль в память контроллера и на диск">💾 Сохранить профиль</button>
+        <div class="nav-divider"></div>
+        <div class="profile-actions">
+          <button class="btn-load-profile" id="btn-load-current-profile" title="Считать текущий активный профиль и настройки с клавиатуры">📥 Считать с клавиатуры</button>
+          <button class="btn-save-profile" id="btn-save-current-profile" title="Сохранить текущий профиль в память контроллера и на диск">💾 Сохранить профиль</button>
+        </div>
       </div>
     </nav>
     <div class="toast-notification" id="toast-notification">Профиль сохранен!</div>
@@ -436,14 +441,14 @@
             <h3 class="card-title">Синхронизация и бэкап</h3>
             <p class="panel-desc">Считывание настроек с клавиатуры, экспорт бэкапа в JSON или открытие папки с профилями.</p>
             <div class="actions-group-vertical">
-              <button class="btn btn-secondary" id="btn-reload-hardware-settings" style="border-color:#1e5a8a; color:#90caf9;">📥 Считать настройки из клавиатуры</button>
-              <button class="btn btn-primary" id="btn-export-profiles" style="background:#173d27; border-color:#2e7d32; color:#a5d6a7;">📤 Экспортировать бэкап (.json)...</button>
-              <button class="btn btn-secondary" id="btn-import-profiles" style="border-color:#1e5a8a; color:#90caf9;">📥 Импортировать из файла (.json)...</button>
+              <button class="btn btn-secondary" id="btn-reload-hardware-settings">📥 Считать настройки из клавиатуры</button>
+              <button class="btn btn-secondary" id="btn-export-profiles">📤 Экспортировать бэкап (.json)...</button>
+              <button class="btn btn-secondary" id="btn-import-profiles">📥 Импортировать из файла (.json)...</button>
               <button class="btn btn-secondary" id="btn-reveal-finder">📂 Показать профили в Finder</button>
             </div>
-            <div class="info-item" style="margin-top:auto; font-size:10px; color:#8b92a0; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
-              <span class="info-key">Автосохранение:</span>
-              <span class="info-val text-green" title="~/Library/Application Support/Keyrox/profiles.json">~/Library/.../profiles.json</span>
+            <div class="card-footer-info">
+              <span class="footer-info-key">Файл профилей:</span>
+              <span class="footer-info-val code text-green" title="~/Library/Application Support/Keyrox/profiles.json">~/Library/.../profiles.json</span>
             </div>
           </div>
 
@@ -452,42 +457,46 @@
             <h3 class="card-title">Сброс параметров</h3>
             <p class="panel-desc">Выборочный сброс подсветки или возврат всех параметров к заводским значениям контроллера.</p>
             <div class="actions-group-vertical">
-              <button class="btn btn-secondary" id="btn-reset-led">Сбросить световые эффекты (на Wave)</button>
-              <button class="btn btn-secondary" id="btn-reset-led-custom">Очистить поклавишную подсветку</button>
-              <button class="btn btn-secondary" id="btn-reset-macro-settings">Очистить сохраненные макросы</button>
-              <div style="border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0;"></div>
+              <button class="btn btn-secondary" id="btn-reset-led">🔄 Сбросить режим подсветки (на Wave)</button>
+              <button class="btn btn-secondary" id="btn-reset-led-custom">🧹 Очистить поклавишную подсветку</button>
+              <button class="btn btn-secondary" id="btn-reset-macro-settings">🗑️ Очистить сохраненные макросы</button>
               <button class="btn btn-warning" id="btn-restore-defaults">⚠️ Сбросить всё до заводских настроек</button>
+            </div>
+            <div class="card-footer-info">
+              <span class="footer-info-key">Внутренняя память:</span>
+              <span class="footer-info-val code text-orange">Flash ROM GK8911M</span>
             </div>
           </div>
 
           <!-- Column 3: Hardware Info -->
           <div class="panel-card">
             <h3 class="card-title">Информация об оборудовании</h3>
+            <p class="panel-desc">Аппаратные характеристики контроллера, IOKit-драйвера и службы фонового вотчдога.</p>
             <div class="info-list">
               <div class="info-item">
-                <span class="info-key">Модель клавиатуры:</span>
-                <span class="info-val">Red Square Keyrox TKL (GK8911M)</span>
+                <span class="info-key">Модель клавиатуры</span>
+                <span class="info-val">Keyrox TKL</span>
               </div>
               <div class="info-item">
-                <span class="info-key">USB VID / PID:</span>
-                <span class="info-val">0x1A2C : 0x2511</span>
+                <span class="info-key">USB VID / PID</span>
+                <span class="info-val code">0x1A2C : 0x2511</span>
               </div>
               <div class="info-item">
-                <span class="info-key">Версия прошивки:</span>
-                <span class="info-val" id="info-fw-version">GK8911M-DP-PID2511-104K_V0045</span>
+                <span class="info-key">Версия прошивки</span>
+                <span class="info-val code" id="info-fw-version">GK8911M-DP-V0045</span>
               </div>
               <div class="info-item">
-                <span class="info-key">Драйвер связи:</span>
-                <span class="info-val">Apple IOKit / IOHIDManager (Native)</span>
+                <span class="info-key">Драйвер связи</span>
+                <span class="info-val">Apple IOKit (Native)</span>
               </div>
               <div class="info-item">
-                <span class="info-key">Sleep Watchdog:</span>
-                <span class="info-val text-green" id="info-watchdog">Активен (LaunchAgent juchen-keepalive)</span>
+                <span class="info-key">Служба Watchdog</span>
+                <span class="info-val status-active" id="info-watchdog">Активен (keepalive)</span>
               </div>
-              <div class="info-item">
-                <span class="info-key">USB Порт:</span>
-                <span class="info-val">0x14200000 (Hub Port 2)</span>
-              </div>
+            </div>
+            <div class="card-footer-info">
+              <span class="footer-info-key">USB Порт:</span>
+              <span class="footer-info-val code text-blue">0x14200000 (Port 2)</span>
             </div>
           </div>
         </div>

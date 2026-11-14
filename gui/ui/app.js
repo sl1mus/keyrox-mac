@@ -791,7 +791,9 @@
       statusText.textContent = `Подключено — Red Square Keyrox TKL (FW: ${status.fw || 'GK8911M'})`;
     }
     if (infoFw && status.fw) {
-      infoFw.textContent = status.fw;
+      const cleanFw = status.fw.replace(/PID2511-104K_/, '');
+      infoFw.textContent = cleanFw;
+      infoFw.title = status.fw;
     }
 
     const prevProfile = state.currentProfile;
