@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Square Keyrox TKL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Window Titlebar -->
+    <header class="titlebar">
+      <div class="brand">
+        <img src="assets/logo.png" alt="Logo" class="brand-logo">
+        <span class="brand-title">RED SQUARE KEYROX TKL</span>
+        <span class="brand-subtitle">macOS Control Panel v1.1</span>
+      </div>
+      <div class="window-controls">
+        <button class="win-btn win-min" id="btn-minimize" title="Свернуть">&#x2014;</button>
+        <button class="win-btn win-close" id="btn-close" title="Закрыть">&times;</button>
+      </div>
+    </header>
+
+    <!-- Main Navigation Bar -->
+    <nav class="nav-bar">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="led">
+          <img src="assets/ioc_func_rgb.png" alt="LED" class="tab-icon">
+          <span>Panel LED</span>
+        </button>
+        <button class="tab-btn" data-tab="remap">
+          <img src="assets/ioc_func_macro.png" alt="Remap" class="tab-icon">
+          <span>Key Remap</span>
+        </button>
+        <button class="tab-btn" data-tab="custom">
+          <img src="assets/table_main_icon.png" alt="Custom" class="tab-icon">
+          <span>Custom Matrix</span>
+        </button>
+        <button class="tab-btn" data-tab="settings">
+          <img src="assets/ioc_func_set.png" alt="Settings" class="tab-icon">
+          <span>Settings</span>
+        </button>
+      </div>
+
+      <div class="profile-selector">
+        <span class="profile-label">Профиль:</span>
+        <div class="profile-pills">
+          <button class="profile-btn active" data-profile="0">P1</button>
+          <button class="profile-btn" data-profile="1">P2</button>
+          <button class="profile-btn" data-profile="2">P3</button>
+          <button class="profile-btn" data-profile="3">P4</button>
+        </div>
+        <button class="btn-load-profile" id="btn-load-current-profile" title="Считать текущий активный профиль и настройки с клавиатуры">📥 Загрузить настройки</button>
+        <button class="btn-save-profile" id="btn-save-current-profile" title="Сохранить текущий профиль в память контроллера и на диск">💾 Сохранить профиль</button>
+      </div>
+    </nav>
+    <div class="toast-notification" id="toast-notification">Профиль сохранен!</div>
+
+    <!-- Interactive Keyboard Preview -->
+    <section class="keyboard-section">
+      <div class="keyboard-wrapper">
+        <div class="keyboard-canvas" id="keyboard-canvas">
+          <!-- 87 interactive keys rendered dynamically here -->
+        </div>
+      </div>
+      <div class="keyboard-quickbar">
+        <span class="keys-selected-count" id="keys-selected-count">Выбрано клавиш: 0</span>
+        <div class="quick-select-btns">
+          <button class="btn-micro" id="btn-select-all">Все</button>
+          <button class="btn-micro" id="btn-select-wasd">WASD + Стрелки</button>
+          <button class="btn-micro" id="btn-select-fkeys">F-ряд</button>
+          <button class="btn-micro" id="btn-select-numrow">Цифры</button>
+          <button class="btn-micro" id="btn-select-clear">Снять выделение</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab Panels Container -->
+    <main class="content-panels">
+      <!-- TAB 1: Panel LED -->
+      <section class="tab-panel active" id="tab-panel-led">
+        <div class="panel-grid">
+          <!-- Column 1: Effects, Direction & Speed -->
+          <div class="panel-card">
+            <h3 class="card-title">Эффекты подсветки</h3>
+            
+            <div class="form-row-compact">
+              <div class="form-group flex-2">
+                <label for="mode-select">Режим свечения:</label>
+                <select id="mode-select" class="custom-select">
+                  <option value="1">Wave (Волна)</option>
+                  <option value="0">Const (Статичный)</option>
+                  <option value="9">Breathe (Дыхание)</option>
+                  <option value="8">Spectrum (Спектр)</option>
+                  <option value="2">Cross (Перекрестие)</option>
+                  <option value="3">Point (Одиночный всплеск)</option>
+                  <option value="4">Custom (Пользовательский)</option>
+                  <option value="5">Stars (Звезды)</option>
+                  <option value="6">Snow (Снегопад)</option>
+                  <option value="7">Rain (Дождь)</option>
+                  <option value="10">Line Diffusion (Линейная диффузия)</option>
+                  <option value="11">Plumflower (Цветок)</option>
+                  <option value="12">Heartrate (Пульс)</option>
+                  <option value="13">Shoot (Выстрел)</option>
+                  <option value="14">Rotate (Вращение)</option>
+                  <option value="15">Rect Cone (Конус)</option>
+                  <option value="16">Circle Diffusion (Круги на воде)</option>
+                  <option value="18">MultiLayer (Многослойный)</option>
+                  <option value="19">MultiZone (Зональный)</option>
+                  <option value="17">Close (Выключить подсветку)</option>
+                </select>
+              </div>
+
+              <div class="form-group flex-1">
+                <label for="led-custom-slot">Custom слот:</label>
+                <select id="led-custom-slot" class="custom-select">
+                  <option value="0">Custom 1</option>
+                  <option value="1">Custom 2</option>
+                  <option value="2">Custom 3</option>
+                  <option value="3">Custom 4</option>
+                  <option value="4">Custom 5</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Direction Selector (6 Directions) -->
+            <div class="form-group">
+              <label>Направление волны / эффекта:</label>
+              <div class="direction-btn-group" id="dir-group">
+                <button class="dir-btn active" data-dir="0" title="Влево">◀ Влево</button>
+                <button class="dir-btn" data-dir="1" title="Вправо">▶ Вправо</button>
+                <button class="dir-btn" data-dir="2" title="Вверх">▲ Вверх</button>
+                <button class="dir-btn" data-dir="3" title="Вниз">▼ Вниз</button>
+                <button class="dir-btn" data-dir="4" title="По часовой">↻ По часовой</button>
+                <button class="dir-btn" data-dir="5" title="Против часовой">↺ Против часовой</button>
+              </div>
+            </div>
+
+            <!-- Sliders Group -->
+            <div class="sliders-group">
+              <div class="form-group">
+                <div class="slider-header">
+                  <label for="slider-brightness">Яркость (Brightness):</label>
+                  <span class="slider-value" id="val-brightness">4 / 4</span>
+                </div>
+                <input type="range" id="slider-brightness" min="0" max="4" step="1" value="4" class="custom-slider">
+                <div class="slider-marks">
+                  <span>Выкл</span><span>1</span><span>2</span><span>3</span><span>Макс</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="slider-header">
+                  <label for="slider-speed">Скорость эффекта (Speed):</label>
+                  <span class="slider-value" id="val-speed">2 / 4</span>
+                </div>
+                <input type="range" id="slider-speed" min="0" max="4" step="1" value="2" class="custom-slider">
+                <div class="slider-marks">
+                  <span>Медленно</span><span>1</span><span>2</span><span>3</span><span>Быстро</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="quick-power-btns">
+              <button class="btn btn-danger-soft" id="btn-led-off">Выключить LED</button>
+              <button class="btn btn-primary" id="btn-led-on">Включить Wave</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Dual Color Palette (Foreground / Background) -->
+          <div class="panel-card">
+            <div class="card-header-tabs">
+              <h3 class="card-title">Палитра цветов</h3>
+              <div class="color-layer-pills">
+                <button class="color-layer-btn active" id="btn-layer-fg">Передний план</button>
+                <button class="color-layer-btn" id="btn-layer-bg">Фон (Back)</button>
+              </div>
+            </div>
+            
+            <div class="palette-swatches">
+              <div class="swatch" data-color="#ff0000" style="background:#ff0000;" title="Красный"></div>
+              <div class="swatch" data-color="#ff7700" style="background:#ff7700;" title="Оранжевый"></div>
+              <div class="swatch" data-color="#ffff00" style="background:#ffff00;" title="Желтый"></div>
+              <div class="swatch" data-color="#00ff00" style="background:#00ff00;" title="Зеленый"></div>
+              <div class="swatch" data-color="#00ffff" style="background:#00ffff;" title="Голубой"></div>
+              <div class="swatch" data-color="#0066ff" style="background:#0066ff;" title="Синий"></div>
+              <div class="swatch" data-color="#8800ff" style="background:#8800ff;" title="Фиолетовый"></div>
+              <div class="swatch" data-color="#ff00ff" style="background:#ff00ff;" title="Пурпурный"></div>
+              <div class="swatch" data-color="#ffffff" style="background:#ffffff;" title="Белый"></div>
+              <div class="swatch" data-color="#000000" style="background:#000000;" title="Черный / Выкл"></div>
+            </div>
+
+            <div class="color-picker-box">
+              <div class="color-preview-box">
+                <div class="color-swatch-current" id="color-preview" style="background: #ff0000;"></div>
+                <span class="color-hex-text" id="color-hex">#FF0000</span>
+              </div>
+              <div class="rgb-inputs">
+                <div class="rgb-row">
+                  <span>R:</span>
+                  <input type="range" id="slider-r" min="0" max="255" value="255" class="custom-slider slider-red">
+                  <span class="rgb-num" id="val-r">255</span>
+                </div>
+                <div class="rgb-row">
+                  <span>G:</span>
+                  <input type="range" id="slider-g" min="0" max="255" value="0" class="custom-slider slider-green">
+                  <span class="rgb-num" id="val-g">0</span>
+                </div>
+                <div class="rgb-row">
+                  <span>B:</span>
+                  <input type="range" id="slider-b" min="0" max="255" value="0" class="custom-slider slider-blue">
+                  <span class="rgb-num" id="val-b">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions-group">
+              <button class="btn btn-secondary" id="btn-apply-all-color">Залить всю клавиатуру</button>
+              <button class="btn btn-secondary" id="btn-apply-selected-color">Залить выделенные клавиши</button>
+              <button class="btn btn-success" id="btn-save-flash">Сохранить в память (Flash)</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Key Remap & Macro -->
+      <section class="tab-panel" id="tab-panel-remap">
+        <div class="panel-grid">
+          <!-- Column 1: Remap Target and Type -->
+          <div class="panel-card">
+            <h3 class="card-title">Назначение клавиши</h3>
+            <div class="target-key-banner">
+              <span class="target-title">Выбранная клавиша:</span>
+              <span class="target-key-name" id="remap-key-name">Space (Пробел)</span>
+              <span class="target-key-code" id="remap-key-code">[Индекс: 56, HID: 0x2C]</span>
+            </div>
+
+            <!-- Remap category pills -->
+            <div class="remap-type-pills">
+              <button class="remap-type-btn active" data-type="single">Клавиша</button>
+              <button class="remap-type-btn" data-type="media">Медиа</button>
+              <button class="remap-type-btn" data-type="shortcut">Сочетание</button>
+              <button class="remap-type-btn" data-type="macro">Макрос</button>
+              <button class="remap-type-btn" data-type="disable">Отключить</button>
+            </div>
+
+            <!-- Subpanel 1: Single Key -->
+            <div class="remap-subpanel active" id="subpanel-single">
+              <div class="form-group">
+                <label for="select-single-key">Выберите клавишу назначения:</label>
+                <select id="select-single-key" class="custom-select">
+                  <!-- Dynamically populated or standard list -->
+                </select>
+              </div>
+              <p class="panel-desc">Нажмите на любую клавишу на виртуальной клавиатуре выше, чтобы переназначить её.</p>
+            </div>
+
+            <!-- Subpanel 2: Media Key -->
+            <div class="remap-subpanel" id="subpanel-media">
+              <div class="form-group">
+                <label for="select-media-key">Медиа-функция:</label>
+                <select id="select-media-key" class="custom-select">
+                  <option value="0xE2">Mute (Без звука)</option>
+                  <option value="0xE9">Volume + (Громкость +)</option>
+                  <option value="0xEA">Volume - (Громкость -)</option>
+                  <option value="0xCD">Play / Pause (Воспроизведение/Пауза)</option>
+                  <option value="0xB5">Next Track (Следующий трек)</option>
+                  <option value="0xB6">Prev Track (Предыдущий трек)</option>
+                  <option value="0xB7">Stop (Стоп)</option>
+                  <option value="0x18A">Email (Почта)</option>
+                  <option value="0x223">Web / Home (Браузер)</option>
+                  <option value="0x192">Calculator (Калькулятор)</option>
+                  <option value="0x194">My Computer / Finder (Проводник)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Subpanel 3: Shortcut -->
+            <div class="remap-subpanel" id="subpanel-shortcut">
+              <div class="form-group">
+                <label for="select-shortcut-key">Готовое сочетание клавиш:</label>
+                <select id="select-shortcut-key" class="custom-select">
+                  <option value="ctrl_a">Ctrl + A (Выделить всё)</option>
+                  <option value="ctrl_c">Ctrl + C (Копировать)</option>
+                  <option value="ctrl_v">Ctrl + V (Вставить)</option>
+                  <option value="ctrl_x">Ctrl + X (Вырезать)</option>
+                  <option value="ctrl_z">Ctrl + Z (Отменить)</option>
+                  <option value="ctrl_s">Ctrl + S (Сохранить)</option>
+                  <option value="win_d">Win + D (Рабочий стол)</option>
+                  <option value="win_l">Win + L (Блокировка системы)</option>
+                  <option value="alt_tab">Alt + Tab (Переключение окон)</option>
+                  <option value="win_m">Win + M (Свернуть все окна)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Subpanel 4: Macro -->
+            <div class="remap-subpanel" id="subpanel-macro">
+              <div class="form-row-compact">
+                <div class="form-group flex-2">
+                  <label for="macro-play-mode">Режим воспроизведения:</label>
+                  <select id="macro-play-mode" class="custom-select">
+                    <option value="0">Intercept (Одиночный)</option>
+                    <option value="1">Times play (Повтор N раз)</option>
+                    <option value="2">Hold play (Пока зажата)</option>
+                    <option value="3">Loop play (Зациклить до отмены)</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="macro-repeat-count">Повторов:</label>
+                  <input type="number" id="macro-repeat-count" class="custom-select" min="1" max="99" value="1">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Задержка:</label>
+                <div class="macro-delay-radios">
+                  <label class="radio-label"><input type="radio" name="macro-delay" value="real" checked> Реальная</label>
+                  <label class="radio-label"><input type="radio" name="macro-delay" value="fixed"> Фикс. (50мс)</label>
+                  <label class="radio-label"><input type="radio" name="macro-delay" value="none"> Без задержки</label>
+                </div>
+              </div>
+              <button class="btn btn-secondary" id="btn-record-macro">● Начать запись макроса</button>
+            </div>
+
+            <!-- Subpanel 5: Disable -->
+            <div class="remap-subpanel" id="subpanel-disable">
+              <p class="panel-desc text-warning">Выбранная клавиша будет полностью отключена на уровне контроллера клавиатуры.</p>
+            </div>
+
+            <div class="actions-group-row">
+              <button class="btn btn-primary" id="btn-apply-remap">Назначить на клавишу</button>
+              <button class="btn btn-secondary" id="btn-reset-key">Сбросить эту клавишу</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Remap Overview & Management -->
+          <div class="panel-card">
+            <h3 class="card-title">Управление профилем клавиш</h3>
+            <p class="panel-desc">Все изменения записываются непосредственно в контроллер клавиатуры и действуют в любых приложениях и играх.</p>
+            
+            <div class="remap-list-box" id="remap-active-list">
+              <div class="remap-empty-state">Нет переназначенных клавиш в текущем профиле. Все клавиши работают по умолчанию.</div>
+            </div>
+
+            <div class="actions-group-vertical">
+              <button class="btn btn-warning" id="btn-reset-all-remaps">Сбросить все переназначения клавиш</button>
+              <button class="btn btn-danger-soft" id="btn-reset-macros">Сбросить макросы</button>
+              <button class="btn btn-success" id="btn-save-remap-flash">Сохранить профиль во Flash</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: Custom Matrix -->
+      <section class="tab-panel" id="tab-panel-custom">
+        <div class="panel-grid">
+          <!-- Column 1: Matrix Tools -->
+          <div class="panel-card">
+            <h3 class="card-title">Поклавишная настройка (Custom Matrix)</h3>
+            <p class="panel-desc">
+              Кликните по любой клавише на визуальной клавиатуре выше, чтобы выделить её. Затем выберите оттенок в палитре справа и примените цвет.
+            </p>
+            
+            <div class="form-group">
+              <label for="custom-matrix-slot">Слот матрицы (Custom Slot):</label>
+              <select id="custom-matrix-slot" class="custom-select">
+                <option value="0">Custom 1</option>
+                <option value="1">Custom 2</option>
+                <option value="2">Custom 3</option>
+                <option value="3">Custom 4</option>
+                <option value="4">Custom 5</option>
+              </select>
+            </div>
+
+            <div class="actions-group-vertical" style="margin-top: auto;">
+              <button class="btn btn-primary" id="btn-matrix-apply">Покрасить выбранные клавиши</button>
+              <button class="btn btn-secondary" id="btn-matrix-all">Покрасить всю клавиатуру этим цветом</button>
+              <button class="btn btn-danger-soft" id="btn-matrix-clear-sel">Погасить выбранные клавиши</button>
+              <button class="btn btn-secondary" id="btn-matrix-clear-all">Очистить всю матрицу (погасить)</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Color Picker for Matrix -->
+          <div class="panel-card">
+            <h3 class="card-title">Палитра для матрицы</h3>
+            
+            <div class="palette-swatches">
+              <div class="swatch" data-color="#ff0000" style="background:#ff0000;" title="Красный"></div>
+              <div class="swatch" data-color="#ff7700" style="background:#ff7700;" title="Оранжевый"></div>
+              <div class="swatch" data-color="#ffff00" style="background:#ffff00;" title="Желтый"></div>
+              <div class="swatch" data-color="#00ff00" style="background:#00ff00;" title="Зеленый"></div>
+              <div class="swatch" data-color="#00ffff" style="background:#00ffff;" title="Голубой"></div>
+              <div class="swatch" data-color="#0066ff" style="background:#0066ff;" title="Синий"></div>
+              <div class="swatch" data-color="#8800ff" style="background:#8800ff;" title="Фиолетовый"></div>
+              <div class="swatch" data-color="#ff00ff" style="background:#ff00ff;" title="Пурпурный"></div>
+              <div class="swatch" data-color="#ffffff" style="background:#ffffff;" title="Белый"></div>
+              <div class="swatch" data-color="#000000" style="background:#000000;" title="Черный / Выкл"></div>
+            </div>
+
+            <div class="color-picker-box">
+              <div class="color-preview-box">
+                <div class="color-swatch-current" id="matrix-color-preview" style="background: #00ff00;"></div>
+                <span class="color-hex-text" id="matrix-color-hex">#00FF00</span>
+              </div>
+              <div class="rgb-inputs">
+                <div class="rgb-row">
+                  <span>R:</span>
+                  <input type="range" id="matrix-slider-r" min="0" max="255" value="0" class="custom-slider slider-red">
+                  <span class="rgb-num" id="matrix-val-r">0</span>
+                </div>
+                <div class="rgb-row">
+                  <span>G:</span>
+                  <input type="range" id="matrix-slider-g" min="0" max="255" value="255" class="custom-slider slider-green">
+                  <span class="rgb-num" id="matrix-val-g">255</span>
+                </div>
+                <div class="rgb-row">
+                  <span>B:</span>
+                  <input type="range" id="matrix-slider-b" min="0" max="255" value="0" class="custom-slider slider-blue">
+                  <span class="rgb-num" id="matrix-val-b">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions-group" style="margin-top: auto;">
+              <button class="btn btn-success" id="btn-matrix-save">Сохранить Custom Matrix во Flash</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: Settings -->
+      <section class="tab-panel" id="tab-panel-settings">
+        <div class="panel-grid">
+          <!-- Column 1: Reset Options -->
+          <div class="panel-card">
+            <h3 class="card-title">Сброс и восстановление</h3>
+            <p class="panel-desc">Сброс настроек клавиатуры до исходных заводских значений контроллера ITE GK8911M.</p>
+            <div class="actions-group-vertical">
+              <button class="btn btn-secondary" id="btn-reload-hardware-settings" style="border-color:#1e5a8a; color:#90caf9;">📥 Считать настройки из клавиатуры</button>
+              <button class="btn btn-warning" id="btn-restore-defaults">Сбросить до заводских настроек (Restore Factory)</button>
+              <button class="btn btn-secondary" id="btn-reset-led">Сбросить световые эффекты (Reset Lights)</button>
+              <button class="btn btn-secondary" id="btn-reset-led-custom">Сбросить поклавишную подсветку (Reset Custom Matrix)</button>
+              <button class="btn btn-secondary" id="btn-reset-macro-settings">Сбросить макросы (Reset Macro)</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Hardware Info -->
+          <div class="panel-card">
+            <h3 class="card-title">Информация об оборудовании</h3>
+            <div class="info-list">
+              <div class="info-item">
+                <span class="info-key">Модель клавиатуры:</span>
+                <span class="info-val">Red Square Keyrox TKL (GK8911M)</span>
+              </div>
+              <div class="info-item">
+                <span class="info-key">USB VID / PID:</span>
+                <span class="info-val">0x1A2C : 0x2511</span>
+              </div>
+              <div class="info-item">
+                <span class="info-key">Версия прошивки:</span>
+                <span class="info-val" id="info-fw-version">GK8911M-DP-PID2511-104K_V0045</span>
+              </div>
+              <div class="info-item">
+                <span class="info-key">Драйвер связи:</span>
+                <span class="info-val">Apple IOKit / IOHIDManager (Native)</span>
+              </div>
+              <div class="info-item">
+                <span class="info-key">Sleep Watchdog:</span>
+                <span class="info-val text-green" id="info-watchdog">Активен (LaunchAgent juchen-keepalive)</span>
+              </div>
+              <div class="info-item">
+                <span class="info-key">USB Порт:</span>
+                <span class="info-val">0x14200000 (Hub Port 2)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Status Bar -->
+    <footer class="statusbar">
+      <div class="status-left">
+        <span class="status-dot connected" id="status-dot"></span>
+        <span class="status-text" id="status-text">Подключено — Red Square Keyrox TKL</span>
+      </div>
+      <div class="status-right">
+      </div>
+    </footer>
+  </div>
+
+  <script src="keys.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

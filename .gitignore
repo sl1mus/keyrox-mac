@@ -1,0 +1,17 @@
+# macOS system files
+.DS_Store
+*.swp
+*~
+
+# Build artifacts
+*.o
+keyrox-ctl
+gui/build/
+build/
+dist/
+*.dmg
+*.zip
+
+# User profiles and caches
+profiles.json
+swift-gui/build/

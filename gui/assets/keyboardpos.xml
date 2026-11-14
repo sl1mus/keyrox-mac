@@ -1,0 +1,117 @@
+<positions>
+    <pos rect="8  ,32,26,26"  id="001" value="27" name="Esc"/>
+    <pos rect="62 ,32,26,26"  id="059" value="112" name="F1"/>
+    <pos rect="90 ,32,26,26"  id="060" value="113" name="F2"/>
+    <pos rect="117,32,26,26"  id="061" value="114" name="F3"/>
+    <pos rect="144,32,26,26"  id="062" value="115" name="F4"/>
+    <pos rect="184,32,26,26"  id="063" value="116" name="F5"/>
+    <pos rect="211,32,26,26"  id="064" value="117" name="F6"/>
+    <pos rect="239,32,26,26"  id="065" value="118" name="F7"/>
+    <pos rect="266,32,26,26"  id="066" value="119" name="F8"/>
+    <pos rect="306,32,26,26"  id="067" value="120" name="F9"/>
+    <pos rect="333,32,26,26"  id="068" value="121" name="F10"/>
+    <pos rect="361,32,26,26"  id="087" value="122" name="F11"/>
+    <pos rect="388,32,26,26"  id="088" value="123" name="F12"/>
+    <pos rect="417,32,26,26"  id="311" value="44" name="PrintScreen"/>
+    <pos rect="444,32,26,26"  id="070" value="145" name="ScrollLock"/>
+    <pos rect="472,32,26,26"  id="069" value="19" name="Pause"/>
+
+    <pos rect="9  ,64,26,26"  id="041" value="192" name="~"/>
+    <pos rect="36 ,64,26,26"  id="002" value="49" name="1"/>
+    <pos rect="63 ,64,26,26"  id="003" value="50" name="2"/>
+    <pos rect="90 ,64,26,26"  id="004" value="51" name="3"/>
+    <pos rect="117,64,26,26"  id="005" value="52" name="4"/>
+    <pos rect="144,64,26,26"  id="006" value="53" name="5"/>
+    <pos rect="171,64,26,26"  id="007" value="54" name="6"/>
+    <pos rect="198,64,26,26"  id="008" value="55" name="7"/>
+    <pos rect="225,64,26,26"  id="009" value="56" name="8"/>
+    <pos rect="252,64,26,26"  id="010" value="57" name="9"/>
+    <pos rect="279,64,26,26"  id="011" value="48" name="0"/>
+    <pos rect="306,64,26,26"  id="012" value="189" name="-"/>
+    <pos rect="334,64,26,26"  id="013" value="187" name="="/>
+    <pos rect="360,64,52,26"  id="014" value="8" name="Backspace"/>
+    <pos rect="417,64,26,26"  id="338" value="45" name="Insert"/>
+    <pos rect="445,64,26,26"  id="327" value="36" name="Home"/>
+    <pos rect="472,64,26,26"  id="329" value="33" name="PageUp"/>
+    <pos rect="0,0,0,0"  id="325" value="144" name="NumLock"/>
+    <pos rect="0,0,0,0"  id="309" value="111" name="Pad /"/>
+    <pos rect="0,0,0,0"  id="055" value="106" name="Pad *"/>
+    <pos rect="0,0,0,0"  id="074" value="109" name="Pad -"/>
+
+    <pos rect="8  ,92,39,26"  id="015" value="9" name="Tab"/>
+    <pos rect="49 ,92,26,26"  id="016" value="81" name="Q"/>
+    <pos rect="77 ,92,26,26"  id="017" value="87" name="W"/>
+    <pos rect="104,92,26,26"  id="018" value="69" name="E"/>
+    <pos rect="131,92,26,26"  id="019" value="82" name="R"/>
+    <pos rect="158,92,26,26"  id="020" value="84" name="T"/>
+    <pos rect="185,92,26,26"  id="021" value="89" name="Y"/>
+    <pos rect="212,92,26,26"  id="022" value="85" name="U"/>
+    <pos rect="239,92,26,26"  id="023" value="73" name="I"/>
+    <pos rect="266,92,26,26"  id="024" value="79" name="O"/>
+    <pos rect="293,92,26,26"  id="025" value="80" name="P"/>
+    <pos rect="320,92,26,26"  id="026" value="219" name="["/>
+    <pos rect="347,92,26,26"  id="027" value="221" name="]"/>
+    <pos rect="353,119,59,26"  id="028" value="13" name="Enter"/>
+    <pos rect="417,92,26,26"  id="339" value="46" name="Del"/>
+    <pos rect="444,92,26,26"  id="335" value="35" name="End"/>
+    <pos rect="471,92,26,26"  id="337" value="34" name="PageDown"/>
+    <pos rect="0,0,0,0"  id="071" value="103" name="Pad 7"/>
+    <pos rect="0,0,0,0"  id="072" value="104" name="Pad 8"/>
+    <pos rect="0,0,0,0"  id="073" value="105" name="Pad 9"/>
+    <pos rect="0,0,0,0"  id="078" value="107" name="Pad +"/>
+
+    <pos rect="8  ,119,46,26"  id="058" value="20" name="CapsLock"/>
+    <pos rect="56 ,119,26,26"  id="030" value="65" name="A"/>
+    <pos rect="83 ,119,26,26"  id="031" value="83" name="S"/>
+    <pos rect="110,119,26,26"  id="032" value="68" name="D"/>
+    <pos rect="137,119,26,26"  id="033" value="70" name="F"/>
+    <pos rect="164,119,26,26"  id="034" value="71" name="G"/>
+    <pos rect="191,119,26,26"  id="035" value="72" name="H"/>
+    <pos rect="218,119,26,26"  id="036" value="74" name="J"/>
+    <pos rect="245,119,26,26"  id="037" value="75" name="K"/>
+    <pos rect="272,119,26,26"  id="038" value="76" name="L"/>
+    <pos rect="299,119,26,26"  id="039" value="186" name=";"/>
+    <pos rect="326,119,26,26"  id="040" value="222" name="'"/>
+    <pos rect="374,92,38,26"  id="043" value="220" name="\"/>
+    <pos rect="0,0,0,0"  id="075" value="100" name="Pad 4"/>
+    <pos rect="0,0,0,0"  id="076" value="101" name="Pad 5"/>
+    <pos rect="0,0,0,0"  id="077" value="102" name="Pad 6"/>
+    <pos rect="0,0,0,0"  id="0" value="0" name="Pad ,/K107"/>
+
+    <pos rect="8  ,146,59,26"  id="042" value="160" name="LeftShif"/>
+    <pos rect="0,0,0,0"  id="0" value="0" name="K45"/>
+    <pos rect="70 ,146,26,26"  id="044" value="90" name="Z"/>
+    <pos rect="97 ,146,26,26"  id="045" value="88" name="X"/>
+    <pos rect="124,146,26,26"  id="046" value="67" name="C"/>
+    <pos rect="151,146,26,26"  id="047" value="86" name="V"/>
+    <pos rect="178,146,26,26"  id="048" value="66" name="B"/>
+    <pos rect="205,146,26,26"  id="049" value="78" name="N"/>
+    <pos rect="232,146,26,26"  id="050" value="77" name="M"/>
+    <pos rect="259,146,26,26"  id="051" value="188" name=","/>
+    <pos rect="287,146,26,26"   id="052" value="190" name="."/>
+    <pos rect="314,146,26,26"  id="053" value="191" name="/"/>
+    <pos rect="0,0,0,0"  id="0" value="0" name="K56"/>
+    <pos rect="341,146,71,26"  id="310" value="161" name="RightShift"/>
+    <pos rect="444,146,26,26"  id="328" value="38" name="ArrowUp"/>
+    <pos rect="0,0,0,0"  id="079" value="97" name="Pad 1"/>
+    <pos rect="0,0,0,0"  id="080" value="98" name="Pad 2"/>
+    <pos rect="0,0,0,0"  id="081" value="99" name="Pad 3"/>
+    <pos rect="0,0,0,0"  id="284" value="269" name="Pad Enter"/>
+
+    <pos rect="9  ,174,31,26"  id="029" value="162" name="LeftCtrl"/>
+    <pos rect="40 ,174,31,26"  id="347" value="91" name="LeftWin"/>
+    <pos rect="77 ,174,31,26"  id="056" value="164" name="LeftAtl"/>
+    <pos rect="0,0,0,0"  id="0" value="0" name="K150"/>
+    <pos rect="110,174,166,26"  id="057" value="32" name="Spacebar"/>
+    <pos rect="0,0,0,0"  id="0" value="0" name="K151"/>
+    <pos rect="279,174,31,26"  id="312" value="165" name="RightAlt"/>
+    <pos rect="313,174,31,26"  id="0" value="0" name="Fn"/>
+
+    <pos rect="347,174,31,26"  id="349" value="93" name="App"/>
+    <pos rect="384,174,31,26"  id="285" value="163" name="RightCtrl"/>
+    <pos rect="418,174,26,26"  id="331" value="37" name="ArrowLeft"/>
+    <pos rect="445,174,26,26"  id="336" value="40" name="ArrowDown"/>
+    <pos rect="472,174,26,26"  id="333" value="39" name="ArrowRight"/>
+    <pos rect="0,0,0,0"  id="082" value="96" name="Pad 0"/>
+    <pos rect="0,0,0,0"  id="083" value="110" name="Pad ."/>
+</positions>
