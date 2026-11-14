@@ -444,7 +444,22 @@
             </div>
           </div>
 
-          <!-- Column 2: Hardware Info -->
+          <!-- Column 2: Backup & Disk Storage -->
+          <div class="panel-card">
+            <h3 class="card-title">Резервное копирование (Диск)</h3>
+            <p class="panel-desc">Экспорт всех 4 профилей и настроек в JSON-файл или восстановление из резервной копии.</p>
+            <div class="actions-group-vertical">
+              <button class="btn btn-primary" id="btn-export-profiles" style="background:#173d27; border-color:#2e7d32; color:#a5d6a7;">📤 Экспортировать бэкап (.json)...</button>
+              <button class="btn btn-secondary" id="btn-import-profiles" style="border-color:#1e5a8a; color:#90caf9;">📥 Импортировать из файла (.json)...</button>
+              <button class="btn btn-secondary" id="btn-reveal-finder">📂 Показать профили в Finder</button>
+            </div>
+            <div class="info-item" style="margin-top:auto; font-size:10px; color:#8b92a0; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
+              <span class="info-key">Автосохранение:</span>
+              <span class="info-val text-green" title="~/Library/Application Support/Keyrox/profiles.json">~/Library/.../profiles.json</span>
+            </div>
+          </div>
+
+          <!-- Column 3: Hardware Info -->
           <div class="panel-card">
             <h3 class="card-title">Информация об оборудовании</h3>
             <div class="info-list">

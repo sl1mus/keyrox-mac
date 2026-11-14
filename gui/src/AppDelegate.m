@@ -1,4 +1,5 @@
 #import "AppDelegate.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @interface TitleBarDragView : NSView
 @end
@@ -254,6 +255,65 @@
                 }
             }
         }
+        return;
+    }
+    if ([action isEqualToString:@"exportProfilesToFile"]) {
+        NSDictionary *data = dict[@"data"];
+        if (!data) return;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSSavePanel *savePanel = [NSSavePanel savePanel];
+            savePanel.title = @"Экспорт настроек Keyrox";
+            savePanel.nameFieldStringValue = @"keyrox_profiles_backup.json";
+            savePanel.allowedContentTypes = @[UTTypeJSON];
+            [savePanel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
+                if (result == NSModalResponseOK) {
+                    NSURL *url = savePanel.URL;
+                    if (url) {
+                        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];
+                        [jsonData writeToURL:url atomically:YES];
+                        NSLog(@"[Keyrox] Exported profiles to %@", url.path);
+                        [self sendJSEvent:@"onToastMessage" data:@{@"message": [NSString stringWithFormat:@"Настройки экспортированы: %@", [url lastPathComponent]]}];
+                    }
+                }
+            }];
+        });
+        return;
+    }
+    if ([action isEqualToString:@"importProfilesFromFile"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSOpenPanel *openPanel = [NSOpenPanel openPanel];
+            openPanel.title = @"Импорт настроек Keyrox";
+            openPanel.allowedContentTypes = @[UTTypeJSON];
+            openPanel.allowsMultipleSelection = NO;
+            openPanel.canChooseDirectories = NO;
+            openPanel.canChooseFiles = YES;
+            [openPanel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
+                if (result == NSModalResponseOK) {
+                    NSURL *url = openPanel.URL;
+                    if (url) {
+                        NSData *jsonData = [NSData dataWithContentsOfURL:url];
+                        if (jsonData) {
+                            NSDictionary *profilesData = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
+                            if (profilesData) {
+                                [self sendJSEvent:@"onProfilesLoaded" data:profilesData];
+                                [self sendJSEvent:@"onToastMessage" data:@{@"message": [NSString stringWithFormat:@"Импортированы настройки из %@", [url lastPathComponent]]}];
+                            }
+                        }
+                    }
+                }
+            }];
+        });
+        return;
+    }
+    if ([action isEqualToString:@"revealProfilesInFinder"]) {
+        NSString *appSupport = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *dir = [appSupport stringByAppendingPathComponent:@"Keyrox"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString *filePath = [dir stringByAppendingPathComponent:@"profiles.json"];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+            [@"{}" writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
+        [[NSWorkspace sharedWorkspace] selectFile:filePath inFileViewerRootedAtPath:@""];
         return;
     }
 

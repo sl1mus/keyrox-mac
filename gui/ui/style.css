@@ -357,6 +357,11 @@ body {
   height: 100%;
 }
 
+#tab-panel-settings .panel-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
 .panel-card {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);

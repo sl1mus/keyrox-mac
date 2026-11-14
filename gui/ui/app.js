@@ -740,6 +740,22 @@
     showToast('Макросы очищены');
   });
 
+  // Backup & File Export/Import
+  document.getElementById('btn-export-profiles')?.addEventListener('click', () => {
+    sendToNative({
+      action: 'exportProfilesToFile',
+      data: profiles
+    });
+  });
+
+  document.getElementById('btn-import-profiles')?.addEventListener('click', () => {
+    sendToNative({ action: 'importProfilesFromFile' });
+  });
+
+  document.getElementById('btn-reveal-finder')?.addEventListener('click', () => {
+    sendToNative({ action: 'revealProfilesInFinder' });
+  });
+
   // 10. Window Minimize & Close
   document.getElementById('btn-minimize')?.addEventListener('click', () => {
     sendToNative({ action: 'minimizeWindow' });
@@ -891,6 +907,12 @@
           updateMatrixPaletteUI();
         }
       }
+    }
+  };
+
+  window.onToastMessage = function(data) {
+    if (data && data.message) {
+      showToast(data.message);
     }
   };
 
