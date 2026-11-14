@@ -1,13 +1,15 @@
 CC ?= clang
-CFLAGS ?= -O2 -Wall -Wextra -std=c99
-LDFLAGS ?= -framework IOKit -framework CoreFoundation
+CFLAGS ?= -O2 -Wall -Wextra
+OBJCFLAGS ?= -O2 -Wall -Wextra -fobjc-arc
+LDFLAGS ?= -framework IOKit -framework CoreFoundation -framework IOUSBHost -framework Foundation
 
-SRC = main.c keyrox_hid.c keyrox_proto.c
-OBJ = $(SRC:.c=.o)
+C_SRC = main.c keyrox_hid.c keyrox_proto.c
+OBJC_SRC = keyrox_reset.m
+OBJ = $(C_SRC:.c=.o) $(OBJC_SRC:.m=.o)
 TARGET = keyrox-ctl
 
-INSTALL_DIR ?= /Users/kistenev/.local/bin
-AGY_BIN_DIR ?= /Users/kistenev/.gemini/antigravity/bin
+INSTALL_DIR ?= $(HOME)/.local/bin
+AGY_BIN_DIR ?= $(HOME)/.gemini/antigravity/bin
 
 all: $(TARGET)
 
@@ -16,6 +18,9 @@ $(TARGET): $(OBJ)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.m
+	$(CC) $(OBJCFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJ) $(TARGET)

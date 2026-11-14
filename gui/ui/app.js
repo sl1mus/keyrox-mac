@@ -367,6 +367,11 @@
     loadHardwareAndProfileSettings();
   });
 
+  document.getElementById('btn-status-revive')?.addEventListener('click', () => {
+    showToast('⚡ Отправка USB Bus Reset в контроллер...');
+    sendToNative({ action: 'reviveDevice' });
+  });
+
   // 5. Lighting Mode & Direction Controls
   modeSelect?.addEventListener('change', () => {
     const mode = parseInt(modeSelect.value, 10);

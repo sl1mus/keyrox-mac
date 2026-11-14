@@ -1,4 +1,5 @@
 #include "keyrox_hid.h"
+#include "keyrox_reset.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,7 @@
 static void print_usage(const char *prog) {
     printf("keyrox-ctl — Native macOS Utility for Red Square Keyrox TKL (1a2c:2511)\n\n");
     printf("Usage:\n");
+    printf("  %s revive                    Send USB Bus Reset to revive frozen keyboard without unplugging\n", prog);
     printf("  %s status                    Query keyboard status, firmware version, and settings\n", prog);
     printf("  %s mode <name|0..19>         Set lighting mode\n", prog);
     printf("  %s brightness <0..4>         Set backlight brightness level\n", prog);
@@ -74,6 +76,27 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(cmd, "modes") == 0) {
         print_modes();
+        return 0;
+    }
+
+    if (strcmp(cmd, "revive") == 0 || strcmp(cmd, "reset-usb") == 0) {
+        printf("[*] Sending hardware USB Bus Reset to Keyrox TKL (1a2c:2511)...\n");
+        if (keyrox_usb_bus_reset() != 0) {
+            fprintf(stderr, "[-] USB Bus Reset failed. Ensure keyboard is physically connected.\n");
+            return 1;
+        }
+        printf("[+] Electrical USB Bus Reset successful! Re-enumerating controller...\n");
+        usleep(600000); /* 600ms for MCU reboot and re-enumeration */
+
+        keyrox_device_t *kdev = keyrox_open();
+        if (kdev) {
+            keyrox_set_mode(kdev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
+            keyrox_set_brightness(kdev, 4);
+            keyrox_close(kdev);
+            printf("[+] Keyboard successfully revived and initialized to Wave mode (Brightness: 4/4)!\n");
+        } else {
+            printf("[!] USB Bus Reset issued. macOS HID driver re-enumerating (test typing now).\n");
+        }
         return 0;
     }
 

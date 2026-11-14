@@ -1,7 +1,7 @@
 CC = clang
 CFLAGS = -O2 -Wall -Wextra -std=c99 -fobjc-arc
 OBJCFLAGS = -O2 -Wall -Wextra -fobjc-arc
-FRAMEWORKS = -framework Cocoa -framework WebKit -framework IOKit -framework CoreFoundation -framework UniformTypeIdentifiers
+FRAMEWORKS = -framework Cocoa -framework WebKit -framework IOKit -framework CoreFoundation -framework UniformTypeIdentifiers -framework IOUSBHost
 
 APP_NAME = Keyrox
 BUILD_DIR = build
@@ -11,7 +11,7 @@ MACOS_DIR = $(CONTENTS)/MacOS
 RESOURCES_DIR = $(CONTENTS)/Resources
 
 C_SRCS = ../keyrox_hid.c ../keyrox_proto.c
-OBJC_SRCS = src/main.m src/AppDelegate.m
+OBJC_SRCS = src/main.m src/AppDelegate.m ../keyrox_reset.m
 
 all: $(APP_BUNDLE)
 

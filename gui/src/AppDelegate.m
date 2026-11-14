@@ -1,5 +1,6 @@
 #import "AppDelegate.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#include "keyrox_reset.h"
 
 @interface TitleBarDragView : NSView
 @end
@@ -219,6 +220,17 @@
         if (urlStr) {
             [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlStr]];
         }
+        return;
+    }
+    if ([action isEqualToString:@"reviveDevice"]) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+            keyrox_usb_bus_reset();
+            usleep(600000);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self checkDeviceStatus];
+                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"⚡ Шина USB перезапущена, клавиатура реанимирована!"}];
+            });
+        });
         return;
     }
     if ([action isEqualToString:@"takeSnapshot"]) {

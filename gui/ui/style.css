@@ -847,10 +847,32 @@ body {
   font-weight: 500;
 }
 
-.status-link {
-  color: #a4abbd;
-  text-decoration: none;
-  transition: color 0.15s ease;
+.btn-revive-usb {
+  background: rgba(255, 145, 0, 0.12);
+  border: 1px solid rgba(255, 145, 0, 0.35);
+  color: #ffb74d;
+  height: 18px;
+  line-height: 16px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-revive-usb:hover {
+  background: rgba(255, 145, 0, 0.28);
+  border-color: #ff9100;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 145, 0, 0.4);
+}
+
+.btn-revive-usb:active {
+  transform: scale(0.96);
 }
 
 .status-link:hover {
