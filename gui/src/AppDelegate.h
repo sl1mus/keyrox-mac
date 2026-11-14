@@ -7,4 +7,8 @@
 @property (strong, nonatomic) NSWindow *window;
 @property (strong, nonatomic) WKWebView *webView;
 
+- (void)showAboutPanel:(id)sender;
+- (void)checkForUpdates:(id)sender;
+- (void)openSettingsTab:(id)sender;
+
 @end

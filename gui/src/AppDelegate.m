@@ -31,9 +31,142 @@
 
 @implementation AppDelegate
 
+- (void)setupMainMenu {
+    NSMenu *mainMenu = [[NSMenu alloc] init];
+
+    // 1. Application Menu (Keyrox)
+    NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Keyrox"];
+    
+    // About
+    NSMenuItem *aboutItem = [[NSMenuItem alloc] initWithTitle:@"О программе Keyrox"
+                                                       action:@selector(showAboutPanel:)
+                                                keyEquivalent:@""];
+    [aboutItem setTarget:self];
+    [appMenu addItem:aboutItem];
+
+    // Check for Updates
+    NSMenuItem *updateItem = [[NSMenuItem alloc] initWithTitle:@"Проверить обновления..."
+                                                        action:@selector(checkForUpdates:)
+                                                 keyEquivalent:@""];
+    [updateItem setTarget:self];
+    [appMenu addItem:updateItem];
+
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
+    // Preferences / Settings (Cmd+,)
+    NSMenuItem *prefsItem = [[NSMenuItem alloc] initWithTitle:@"Настройки..."
+                                                       action:@selector(openSettingsTab:)
+                                                keyEquivalent:@","];
+    [prefsItem setTarget:self];
+    [appMenu addItem:prefsItem];
+
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
+    // Services
+    NSMenuItem *servicesItem = [[NSMenuItem alloc] initWithTitle:@"Службы"
+                                                          action:nil
+                                                   keyEquivalent:@""];
+    NSMenu *servicesMenu = [[NSMenu alloc] initWithTitle:@"Службы"];
+    [servicesItem setSubmenu:servicesMenu];
+    [NSApp setServicesMenu:servicesMenu];
+    [appMenu addItem:servicesItem];
+
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
+    // Hide / Show
+    [appMenu addItemWithTitle:@"Скрыть Keyrox" action:@selector(hide:) keyEquivalent:@"h"];
+    NSMenuItem *hideOthers = [[NSMenuItem alloc] initWithTitle:@"Скрыть остальные"
+                                                        action:@selector(hideOtherApplications:)
+                                                 keyEquivalent:@"h"];
+    [hideOthers setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagOption];
+    [appMenu addItem:hideOthers];
+    [appMenu addItemWithTitle:@"Показать все" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+
+    [appMenu addItem:[NSMenuItem separatorItem]];
+
+    // Quit
+    [appMenu addItemWithTitle:@"Завершить Keyrox" action:@selector(terminate:) keyEquivalent:@"q"];
+
+    [appMenuItem setSubmenu:appMenu];
+    [mainMenu addItem:appMenuItem];
+
+    // 2. Device Menu (Устройство)
+    NSMenuItem *deviceMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *deviceMenu = [[NSMenu alloc] initWithTitle:@"Устройство"];
+
+    NSMenuItem *readSettingsItem = [[NSMenuItem alloc] initWithTitle:@"Считать настройки с клавиатуры"
+                                                              action:@selector(menuReadSettings:)
+                                                       keyEquivalent:@"r"];
+    [readSettingsItem setTarget:self];
+    [deviceMenu addItem:readSettingsItem];
+
+    NSMenuItem *saveProfileItem = [[NSMenuItem alloc] initWithTitle:@"Сохранить профиль во Flash"
+                                                             action:@selector(menuSaveProfile:)
+                                                      keyEquivalent:@"s"];
+    [saveProfileItem setTarget:self];
+    [deviceMenu addItem:saveProfileItem];
+
+    [deviceMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *reviveItem = [[NSMenuItem alloc] initWithTitle:@"⚡ Перезапуск шины USB (Revive)"
+                                                        action:@selector(menuReviveUSB:)
+                                                 keyEquivalent:@"R"];
+    [reviveItem setTarget:self];
+    [deviceMenu addItem:reviveItem];
+
+    [deviceMenuItem setSubmenu:deviceMenu];
+    [mainMenu addItem:deviceMenuItem];
+
+    // 3. Window Menu (Окно)
+    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Окно"];
+    [windowMenu addItemWithTitle:@"Свернуть" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Развернуть" action:@selector(performZoom:) keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Закрыть окно" action:@selector(performClose:) keyEquivalent:@"w"];
+    [windowMenu addItemWithTitle:@"Все окна — на передний план" action:@selector(arrangeInFront:) keyEquivalent:@""];
+
+    [windowMenuItem setSubmenu:windowMenu];
+    [mainMenu addItem:windowMenuItem];
+    [NSApp setWindowsMenu:windowMenu];
+
+    // 4. Help Menu (Справка)
+    NSMenuItem *helpMenuItem = [[NSMenuItem alloc] init];
+    NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Справка"];
+
+    NSMenuItem *githubItem = [[NSMenuItem alloc] initWithTitle:@"Репозиторий проекта на GitHub..."
+                                                        action:@selector(openGitHubPage:)
+                                                 keyEquivalent:@""];
+    [githubItem setTarget:self];
+    [helpMenu addItem:githubItem];
+
+    NSMenuItem *issueItem = [[NSMenuItem alloc] initWithTitle:@"Сообщить об ошибке (GitHub Issues)..."
+                                                       action:@selector(openGitHubIssues:)
+                                                keyEquivalent:@""];
+    [issueItem setTarget:self];
+    [helpMenu addItem:issueItem];
+
+    [helpMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *checkUpdatesHelpItem = [[NSMenuItem alloc] initWithTitle:@"Проверить обновления..."
+                                                                  action:@selector(checkForUpdates:)
+                                                           keyEquivalent:@""];
+    [checkUpdatesHelpItem setTarget:self];
+    [helpMenu addItem:checkUpdatesHelpItem];
+
+    [helpMenuItem setSubmenu:helpMenu];
+    [mainMenu addItem:helpMenuItem];
+    [NSApp setHelpMenu:helpMenu];
+
+    [NSApp setMainMenu:mainMenu];
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     _hidQueue = dispatch_queue_create("org.redsquare.keyrox.hid", DISPATCH_QUEUE_SERIAL);
     _lastConnected = NO;
+
+    [self setupMainMenu];
 
     // Window Setup (1080x750 borderless, resizable with custom drag area)
     NSRect frame = NSMakeRect(0, 0, 1080, 750);
@@ -143,7 +276,7 @@
                 NSString *js = [NSString stringWithFormat:@"document.querySelector('.tab-btn[data-tab=\"%@\"]').click();", tab];
                 [self.webView evaluateJavaScript:js completionHandler:nil];
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    [self captureSnapshot:[NSString stringWithFormat:@"keyrox_tab_%@_v2_0.png", tab]];
+                    [self captureSnapshot:[NSString stringWithFormat:@"keyrox_tab_%@_v2_1.png", tab]];
                 });
             });
         }
@@ -261,6 +394,18 @@
         if (urlStr) {
             [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlStr]];
         }
+        return;
+    }
+    if ([action isEqualToString:@"showAbout"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showAboutPanel:nil];
+        });
+        return;
+    }
+    if ([action isEqualToString:@"checkForUpdates"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self checkForUpdates:nil];
+        });
         return;
     }
     if ([action isEqualToString:@"reviveDevice"]) {
@@ -464,6 +609,137 @@
             keyrox_save_settings(dev);
         }
     });
+}
+
+#pragma mark - Menu & App Actions
+
+- (void)showAboutPanel:(id)sender {
+    (void)sender;
+    NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+    style.alignment = NSTextAlignmentCenter;
+    
+    NSString *creditsText = @"Red Square Keyrox TKL Control for macOS\n\n"
+                            @"Разработчик: keyrox-mac contributors\n"
+                            @"Чистый реверс-инжиниринг USB HID протокола чипа ITE GK8911M.\n"
+                            @"Открытый исходный код • MIT License (2026)\n\n"
+                            @"GitHub: https://github.com/kistenev/keyrox-mac";
+    
+    NSAttributedString *credits = [[NSAttributedString alloc] initWithString:creditsText
+                                                                  attributes:@{
+                                                                      NSFontAttributeName: [NSFont systemFontOfSize:11],
+                                                                      NSParagraphStyleAttributeName: style,
+                                                                      NSForegroundColorAttributeName: [NSColor labelColor]
+                                                                  }];
+
+    NSDictionary *options = @{
+        NSAboutPanelOptionApplicationName: @"Red Square Keyrox TKL",
+        NSAboutPanelOptionApplicationVersion: @"1.0.0",
+        NSAboutPanelOptionVersion: @"v1.0.0 (macOS Universal)",
+        @"Copyright": @"Copyright © 2026 keyrox-mac contributors. All rights reserved.",
+        NSAboutPanelOptionCredits: credits
+    };
+    [NSApp orderFrontStandardAboutPanelWithOptions:options];
+}
+
+- (void)checkForUpdates:(id)sender {
+    (void)sender;
+    [self sendJSEvent:@"onToastMessage" data:@{@"message": @"🔍 Проверка обновлений на GitHub..."}];
+
+    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/kistenev/keyrox-mac/releases/latest"];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    [req setValue:@"application/vnd.github.v3+json" forHTTPHeaderField:@"Accept"];
+    [req setValue:@"Keyrox-macOS-App" forHTTPHeaderField:@"User-Agent"];
+    [req setTimeoutInterval:6.0];
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
+            if (error || (httpResp && httpResp.statusCode == 404)) {
+                NSAlert *alert = [[NSAlert alloc] init];
+                alert.messageText = @"Проверка обновлений Keyrox";
+                alert.informativeText = @"Установлена актуальная версия: v1.0.0 (macOS Universal ARM64/x86_64).\n\n"
+                                         @"Репозиторий проекта: github.com/kistenev/keyrox-mac\n"
+                                         @"Вы можете открыть страницу релизов на GitHub для просмотра истории и новостей.";
+                [alert addButtonWithTitle:@"Открыть GitHub Релизы"];
+                [alert addButtonWithTitle:@"Закрыть"];
+                if ([alert runModal] == NSAlertFirstButtonReturn) {
+                    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac/releases"]];
+                }
+                return;
+            }
+
+            if (httpResp && httpResp.statusCode == 200 && data) {
+                NSError *jsonErr = nil;
+                NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonErr];
+                NSString *latestTag = json[@"tag_name"] ?: @"";
+                NSString *htmlUrl = json[@"html_url"] ?: @"https://github.com/kistenev/keyrox-mac/releases";
+                NSString *releaseName = json[@"name"] ?: latestTag;
+
+                NSString *currentVer = @"v1.0.0";
+                if ([latestTag length] > 0 && ![latestTag isEqualToString:currentVer]) {
+                    NSAlert *alert = [[NSAlert alloc] init];
+                    alert.messageText = [NSString stringWithFormat:@"Доступно обновление: %@", latestTag];
+                    alert.informativeText = [NSString stringWithFormat:@"Вышла новая версия Keyrox (%@).\nУстановленная версия: %@.\n\nХотите перейти на GitHub для загрузки?", releaseName, currentVer];
+                    [alert addButtonWithTitle:@"Скачать обновление"];
+                    [alert addButtonWithTitle:@"Позже"];
+                    if ([alert runModal] == NSAlertFirstButtonReturn) {
+                        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:htmlUrl]];
+                    }
+                } else {
+                    NSAlert *alert = [[NSAlert alloc] init];
+                    alert.messageText = @"У вас актуальная версия";
+                    alert.informativeText = [NSString stringWithFormat:@"Keyrox %@ — установлена самая последняя версия приложения.", currentVer];
+                    [alert addButtonWithTitle:@"Отлично"];
+                    [alert runModal];
+                }
+            } else {
+                NSAlert *alert = [[NSAlert alloc] init];
+                alert.messageText = @"Keyrox Control v1.0.0";
+                alert.informativeText = @"Не удалось связаться с сервером обновлений. Проверьте подключение к сети.";
+                [alert addButtonWithTitle:@"ОК"];
+                [alert runModal];
+            }
+        });
+    }];
+    [task resume];
+}
+
+- (void)openSettingsTab:(id)sender {
+    (void)sender;
+    [self.window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    [self.webView evaluateJavaScript:@"document.querySelector('.tab-btn[data-tab=\"settings\"]')?.click();" completionHandler:nil];
+}
+
+- (void)menuReadSettings:(id)sender {
+    (void)sender;
+    [self.window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    [self.webView evaluateJavaScript:@"document.getElementById('btn-load-current-profile')?.click();" completionHandler:nil];
+}
+
+- (void)menuSaveProfile:(id)sender {
+    (void)sender;
+    [self.window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    [self.webView evaluateJavaScript:@"document.getElementById('btn-save-current-profile')?.click();" completionHandler:nil];
+}
+
+- (void)menuReviveUSB:(id)sender {
+    (void)sender;
+    [self.window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    [self.webView evaluateJavaScript:@"document.getElementById('btn-status-revive')?.click();" completionHandler:nil];
+}
+
+- (void)openGitHubPage:(id)sender {
+    (void)sender;
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac"]];
+}
+
+- (void)openGitHubIssues:(id)sender {
+    (void)sender;
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/kistenev/keyrox-mac/issues"]];
 }
 
 @end

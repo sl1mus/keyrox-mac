@@ -761,6 +761,19 @@
     sendToNative({ action: 'revealProfilesInFinder' });
   });
 
+  // App Info & Updates
+  document.getElementById('btn-check-updates-ui')?.addEventListener('click', () => {
+    sendToNative({ action: 'checkForUpdates' });
+  });
+
+  document.getElementById('btn-open-github-ui')?.addEventListener('click', () => {
+    sendToNative({ action: 'openUrl', url: 'https://github.com/kistenev/keyrox-mac' });
+  });
+
+  document.getElementById('btn-show-about-ui')?.addEventListener('click', () => {
+    sendToNative({ action: 'showAbout' });
+  });
+
   // 10. Window Minimize, Maximize & Close
   document.getElementById('btn-minimize')?.addEventListener('click', () => {
     sendToNative({ action: 'minimizeWindow' });
