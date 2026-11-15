@@ -11,7 +11,18 @@ TARGET = keyrox-ctl
 INSTALL_DIR ?= $(HOME)/.local/bin
 AGY_BIN_DIR ?= $(HOME)/.gemini/antigravity/bin
 
-all: $(TARGET)
+all: $(TARGET) daemon
+
+daemon:
+	$(MAKE) -C daemon
+
+gui:
+	$(MAKE) -C gui
+
+test:
+	@mkdir -p tests
+	$(CC) $(CFLAGS) -I. tests/test_proto.c keyrox_proto.c -o tests/test_proto
+	@./tests/test_proto
 
 $(TARGET): $(OBJ)
 	$(CC) $(OBJ) $(LDFLAGS) -o $@
@@ -27,8 +38,9 @@ universal:
 	$(MAKE) -C daemon universal
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(OBJ) $(TARGET) tests/test_proto
 	$(MAKE) -C daemon clean
+	$(MAKE) -C gui clean
 
 install: $(TARGET)
 	$(MAKE) -C daemon universal
@@ -40,4 +52,4 @@ install: $(TARGET)
 	@if [ -d "$(AGY_BIN_DIR)" ]; then cp $(TARGET) $(AGY_BIN_DIR)/$(TARGET) && chmod +x $(AGY_BIN_DIR)/$(TARGET); cp daemon/keyrox-watchdog $(AGY_BIN_DIR)/keyrox-watchdog && chmod +x $(AGY_BIN_DIR)/keyrox-watchdog; fi
 	@echo "Installed $(TARGET) and keyrox-watchdog to $(INSTALL_DIR)"
 
-.PHONY: all clean install universal
+.PHONY: all clean install universal daemon gui test

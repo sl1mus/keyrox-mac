@@ -96,7 +96,7 @@ int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc > 1 && (strcmp(argv[1], "--revive") == 0 || strcmp(argv[1], "-r") == 0)) {
             reviveKeyboard("CLI manual trigger");
-            sleep(1);
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.2]];
             return 0;
         }
 
