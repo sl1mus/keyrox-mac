@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test on macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build CLI & Watchdog Daemon
+        run: |
+          make all
+
+      - name: Run Protocol Unit Tests
+        run: |
+          make test
+
+      - name: Build Universal Binaries (arm64 + x86_64)
+        run: |
+          make universal
+
+      - name: Build GUI App Bundle
+        run: |
+          make gui
