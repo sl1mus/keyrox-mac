@@ -13,9 +13,9 @@
 #include "../keyrox_proto.h"
 
 static IOPMAssertionID gSystemAssertionID = kIOPMNullAssertionID;
-static IOPMAssertionID gDisplayAssertionID = kIOPMNullAssertionID;
 static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
+static BOOL gDisplayIsSleeping = NO;
 
 static void logMessage(const char *format, ...) {
     char timestamp[32] = {0};
@@ -47,27 +47,9 @@ static void createPowerAssertions(void) {
             logMessage("[-] Failed to create PreventUserIdleSystemSleep assertion: 0x%08x", kr);
         }
     }
-    if (gDisplayAssertionID == kIOPMNullAssertionID) {
-        IOReturn kr = IOPMAssertionCreateWithName(
-            kIOPMAssertionTypePreventUserIdleDisplaySleep,
-            kIOPMAssertionLevelOn,
-            CFSTR("Keyrox TKL USB AutoSuspend Prevention"),
-            &gDisplayAssertionID
-        );
-        if (kr == kIOReturnSuccess) {
-            logMessage("Power assertion active: PreventUserIdleDisplaySleep (id: %u)", gDisplayAssertionID);
-        } else {
-            logMessage("[-] Failed to create PreventUserIdleDisplaySleep assertion: 0x%08x", kr);
-        }
-    }
 }
 
 static void releasePowerAssertions(void) {
-    if (gDisplayAssertionID != kIOPMNullAssertionID) {
-        IOPMAssertionRelease(gDisplayAssertionID);
-        logMessage("Power assertion released: PreventUserIdleDisplaySleep (id: %u)", gDisplayAssertionID);
-        gDisplayAssertionID = kIOPMNullAssertionID;
-    }
     if (gSystemAssertionID != kIOPMNullAssertionID) {
         IOPMAssertionRelease(gSystemAssertionID);
         logMessage("Power assertion released: PreventUserIdleSystemSleep (id: %u)", gSystemAssertionID);
@@ -141,6 +123,8 @@ static void checkKeyboardHealth(void) {
             keyrox_close(init_dev);
             logMessage("[+] Initialized reconnected keyboard to Wave mode (Brightness: 4)");
         }
+    } else if (gDisplayIsSleeping) {
+        logMessage("🌙 [Screen Asleep] Heartbeat OK: Keyrox TKL responsive (FW: %s)", fw[0] ? fw : "GK8911M");
     }
 }
 
@@ -159,8 +143,9 @@ int main(int argc, const char *argv[]) {
             return 0;
         }
 
-        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.1 (AutoSuspend Prevention + Heartbeat)");
+        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.2 (System Keep-Alive + 10s Heartbeat)");
         logMessage("Target: VID 0x1A2C, PID 0x2511 / 0x1511 (Red Square Keyrox TKL)");
+        logMessage("Mode: Display Sleep allowed (Screen will sleep normally)");
 
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
@@ -170,11 +155,21 @@ int main(int argc, const char *argv[]) {
         // Register for Display Sleep & Wake notifications
         NSNotificationCenter *wsCenter = [[NSWorkspace sharedWorkspace] notificationCenter];
 
+        [wsCenter addObserverForName:NSWorkspaceScreensDidSleepNotification
+                              object:nil
+                               queue:[NSOperationQueue mainQueue]
+                          usingBlock:^(NSNotification *note) {
+            (void)note;
+            gDisplayIsSleeping = YES;
+            logMessage("🌙 Display went to sleep (NSWorkspaceScreensDidSleepNotification). Heartbeat active.");
+        }];
+
         [wsCenter addObserverForName:NSWorkspaceScreensDidWakeNotification
                               object:nil
                                queue:[NSOperationQueue mainQueue]
                           usingBlock:^(NSNotification *note) {
             (void)note;
+            gDisplayIsSleeping = NO;
             logMessage("📺 Display woke up (NSWorkspaceScreensDidWakeNotification)");
             createPowerAssertions();
             checkKeyboardHealth();
@@ -193,12 +188,12 @@ int main(int argc, const char *argv[]) {
         // Initial health check
         checkKeyboardHealth();
 
-        // 15-second periodic health check & USB heartbeat
+        // 10-second periodic health check & USB heartbeat
         gTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         dispatch_source_set_timer(
             gTimer,
-            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15.0 * NSEC_PER_SEC)),
-            (uint64_t)(15.0 * NSEC_PER_SEC),
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)),
+            (uint64_t)(10.0 * NSEC_PER_SEC),
             1 * NSEC_PER_SEC
         );
         dispatch_source_set_event_handler(gTimer, ^{
