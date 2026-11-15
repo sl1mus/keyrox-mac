@@ -1,4 +1,5 @@
 #include "keyrox_proto.h"
+#include "keyrox_keys.h"
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
@@ -75,4 +76,28 @@ int keyrox_string_to_mode(const char *str) {
     if (strcasecmp(str, "ripple") == 0) return KEYROX_MODE_CIRCLE_DIFFUSION;
 
     return -1;
+}
+
+void keyrox_matrix_packet_init(keyrox_packet_t *pkt, const keyrox_color_t *colors, size_t count) {
+    if (!pkt) return;
+    memset(pkt, 0, sizeof(keyrox_packet_t));
+    uint8_t *raw = (uint8_t *)pkt;
+    raw[0] = 0x00; /* Report ID */
+    raw[5] = KEYROX_CMD_MATRIX_STREAM; /* 0xB0 */
+    raw[6] = 0x01;
+    raw[7] = 0x07;
+
+    if (!colors || count == 0) return;
+
+    size_t n = count > KEYROX_TKL_KEY_COUNT ? KEYROX_TKL_KEY_COUNT : count;
+    for (size_t i = 0; i < n; i++) {
+        uint8_t pos = KEYROX_LED_POSITIONS[i];
+        size_t off = 8 + (size_t)pos * 4;
+        if (off + 3 < KEYROX_REPORT_SIZE) {
+            raw[off + 0] = colors[i].r;
+            raw[off + 1] = colors[i].g;
+            raw[off + 2] = colors[i].b;
+            raw[off + 3] = colors[i].brightness;
+        }
+    }
 }

@@ -105,6 +105,46 @@ TEST(test_string_to_mode_invalid) {
     assert(keyrox_string_to_mode("123bad") == -1);
 }
 
+TEST(test_multi_pid_definitions) {
+    assert(KEYROX_VID == 0x1a2c);
+    assert(KEYROX_PID_V2 == 0x2511);
+    assert(KEYROX_PID_V1 == 0x1511);
+    assert(KEYROX_PID == KEYROX_PID_V2);
+}
+
+TEST(test_matrix_stream_packet) {
+    keyrox_packet_t pkt;
+    keyrox_color_t colors[87];
+    for (int i = 0; i < 87; i++) {
+        colors[i].r = (uint8_t)(i + 1);
+        colors[i].g = (uint8_t)(i + 2);
+        colors[i].b = (uint8_t)(i + 3);
+        colors[i].brightness = 0x80;
+    }
+
+    keyrox_matrix_packet_init(&pkt, colors, 87);
+    uint8_t *raw = (uint8_t *)&pkt;
+
+    /* Report ID */
+    assert(raw[0] == 0x00);
+    /* Streaming opcode header: B0 01 07 */
+    assert(raw[5] == KEYROX_CMD_MATRIX_STREAM);
+    assert(raw[5] == 0xB0);
+    assert(raw[6] == 0x01);
+    assert(raw[7] == 0x07);
+
+    /* First key (Esc, pos = 0) -> offset 8 */
+    assert(raw[8 + 0] == 1);
+    assert(raw[8 + 1] == 2);
+    assert(raw[8 + 2] == 3);
+    assert(raw[8 + 3] == 0x80);
+
+    /* Null pointer safety */
+    keyrox_matrix_packet_init(&pkt, NULL, 0);
+    assert(raw[0] == 0x00);
+    assert(raw[5] == 0xB0);
+}
+
 int main(void) {
     printf("\n=== Running Keyrox Protocol Unit Tests ===\n");
     RUN_TEST(test_packet_struct_size);
@@ -116,6 +156,8 @@ int main(void) {
     RUN_TEST(test_string_to_mode_case_insensitive);
     RUN_TEST(test_string_to_mode_aliases);
     RUN_TEST(test_string_to_mode_invalid);
+    RUN_TEST(test_multi_pid_definitions);
+    RUN_TEST(test_matrix_stream_packet);
 
     printf("\n\033[32m✔ All %d tests passed successfully!\033[0m\n\n", g_tests_passed);
     return 0;

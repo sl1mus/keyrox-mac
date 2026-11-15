@@ -23,6 +23,8 @@ int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level);
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed);
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b);
 int keyrox_set_key_color(keyrox_device_t *dev, uint8_t key_index, uint8_t r, uint8_t g, uint8_t b);
+int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, size_t count);
+uint32_t keyrox_get_pid(keyrox_device_t *dev);
 int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile);
 int keyrox_set_key_remap(keyrox_device_t *dev, uint8_t key_index, uint16_t target_code);
 int keyrox_reset_remap(keyrox_device_t *dev);
