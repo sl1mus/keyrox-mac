@@ -6,23 +6,26 @@
 #include <stdbool.h>
 
 #define KEYROX_VID             0x1a2c
-#define KEYROX_PID             0x2511
+#define KEYROX_PID             0x2511  /* Keyrox TKL V2 (default) */
+#define KEYROX_PID_V2          0x2511  /* Keyrox TKL V2 (G3ms Sapphire) */
+#define KEYROX_PID_V1          0x1511  /* Keyrox TKL V1 (Gateron / Outemu) */
 #define KEYROX_USAGE_PAGE      0xff00
 #define KEYROX_USAGE           0x0002
 #define KEYROX_REPORT_SIZE     521
 #define KEYROX_PAYLOAD_MAX     512
 
 /* Command Opcodes */
-#define KEYROX_CMD_DEV_INFO     0x01
-#define KEYROX_CMD_CONFIG       0x02
-#define KEYROX_CMD_CAPS         0x03
-#define KEYROX_CMD_PROFILE      0x04
-#define KEYROX_CMD_CUSTOM_LED   0x05
-#define KEYROX_CMD_SPEED_BRIGHT 0x06
-#define KEYROX_CMD_REMAP        0x07
-#define KEYROX_CMD_MODE         0x08
-#define KEYROX_CMD_SAVE         0x09
-#define KEYROX_CMD_MACRO        0x0A
+#define KEYROX_CMD_DEV_INFO      0x01
+#define KEYROX_CMD_CONFIG        0x02
+#define KEYROX_CMD_CAPS          0x03
+#define KEYROX_CMD_PROFILE       0x04
+#define KEYROX_CMD_CUSTOM_LED    0x05
+#define KEYROX_CMD_SPEED_BRIGHT  0x06
+#define KEYROX_CMD_REMAP         0x07
+#define KEYROX_CMD_MODE          0x08
+#define KEYROX_CMD_SAVE          0x09
+#define KEYROX_CMD_MACRO         0x0A
+#define KEYROX_CMD_MATRIX_STREAM 0xB0
 
 /* Read mask */
 #define KEYROX_CMD_READ_FLAG    0x80
@@ -81,8 +84,17 @@ typedef struct {
     uint8_t b;
 } keyrox_rgb_t;
 
+/* Per-key color with alpha brightness struct */
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t brightness; /* 0x00..0xFF (Alpha) */
+} keyrox_color_t;
+
 /* Helper functions */
 void keyrox_packet_init(keyrox_packet_t *pkt, uint8_t cmd, uint8_t subcmd, uint32_t offset, const void *data, uint16_t len);
+void keyrox_matrix_packet_init(keyrox_packet_t *pkt, const keyrox_color_t *colors, size_t count);
 const char *keyrox_mode_to_string(keyrox_mode_t mode);
 int keyrox_string_to_mode(const char *str);
 

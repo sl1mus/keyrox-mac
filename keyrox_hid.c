@@ -37,14 +37,21 @@ keyrox_device_t *keyrox_open(void) {
         return NULL;
     }
 
-    CFMutableDictionaryRef dict = create_matching_dict(KEYROX_VID, KEYROX_PID, KEYROX_USAGE_PAGE, KEYROX_USAGE);
-    if (!dict) {
+    static const uint32_t s_supported_pids[] = { KEYROX_PID_V2, KEYROX_PID_V1 };
+    CFMutableArrayRef matches = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+    if (!matches) {
         CFRelease(manager);
         return NULL;
     }
-
-    IOHIDManagerSetDeviceMatching(manager, dict);
-    CFRelease(dict);
+    for (size_t i = 0; i < sizeof(s_supported_pids) / sizeof(s_supported_pids[0]); ++i) {
+        CFMutableDictionaryRef dict = create_matching_dict(KEYROX_VID, s_supported_pids[i], KEYROX_USAGE_PAGE, KEYROX_USAGE);
+        if (dict) {
+            CFArrayAppendValue(matches, dict);
+            CFRelease(dict);
+        }
+    }
+    IOHIDManagerSetDeviceMatchingMultiple(manager, matches);
+    CFRelease(matches);
 
     IOReturn ret = IOHIDManagerOpen(manager, kIOHIDOptionsTypeNone);
     if (ret != kIOReturnSuccess) {
@@ -231,24 +238,34 @@ int keyrox_save_settings(keyrox_device_t *dev) {
     return keyrox_send_packet(dev, &pkt);
 }
 
+int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, size_t count) {
+    if (!dev || !colors || count == 0) return -1;
+    keyrox_packet_t pkt;
+    keyrox_matrix_packet_init(&pkt, colors, count);
+    return keyrox_send_packet(dev, &pkt);
+}
+
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
     if (!dev) return -1;
 
-    /* 9-byte key struct: [r, g, b, r, g, b, mode, bright_fg, bright_bg] */
-    uint8_t key_rgb[9] = { r, g, b, r, g, b, 0x00, 0x7f, 0x7f };
-
-    /* Configure all keys in current profile */
+    keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
     for (size_t i = 0; i < KEYROX_TKL_KEY_COUNT; ++i) {
-        uint32_t offset = (uint32_t)(i * 9);
-        keyrox_packet_t pkt;
-        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, key_rgb, 9);
-        if (keyrox_send_packet(dev, &pkt) != 0) {
-            return -1;
-        }
-        usleep(2000); /* 2 ms between key packets */
+        colors[i].r = r;
+        colors[i].g = g;
+        colors[i].b = b;
+        colors[i].brightness = 0xFF;
     }
 
-    return 0;
+    return keyrox_stream_matrix(dev, colors, KEYROX_TKL_KEY_COUNT);
+}
+
+uint32_t keyrox_get_pid(keyrox_device_t *dev) {
+    if (!dev || !dev->device) return 0;
+    CFNumberRef num = (CFNumberRef)IOHIDDeviceGetProperty(dev->device, CFSTR(kIOHIDProductIDKey));
+    if (!num) return 0;
+    uint32_t pid = 0;
+    CFNumberGetValue(num, kCFNumberIntType, &pid);
+    return pid;
 }
 
 int keyrox_set_key_color(keyrox_device_t *dev, uint8_t key_index, uint8_t r, uint8_t g, uint8_t b) {

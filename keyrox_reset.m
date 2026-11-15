@@ -8,16 +8,16 @@ int keyrox_usb_bus_reset(void) {
     @autoreleasepool {
         CFMutableDictionaryRef match = [IOUSBHostDevice
             createMatchingDictionaryWithVendorID:@(0x1a2c)
-            productID:@(0x2511)
+            productID:nil
             bcdDevice:nil
             deviceClass:nil
             deviceSubclass:nil
             deviceProtocol:nil
             speed:nil
-            productIDArray:nil];
+            productIDArray:@[@(0x2511), @(0x1511)]];
         io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, match);
         if (!service) {
-            fprintf(stderr, "[-] Keyboard 1a2c:2511 not found on USB bus for reset\n");
+            fprintf(stderr, "[-] Keyrox keyboard (1a2c:2511 / 1a2c:1511) not found on USB bus for reset\n");
             return -1;
         }
 
