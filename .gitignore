@@ -7,6 +7,7 @@
 *.o
 keyrox-ctl
 daemon/keyrox-watchdog
+tests/test_proto
 gui/build/
 build/
 dist/
