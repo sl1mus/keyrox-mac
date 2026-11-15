@@ -126,11 +126,18 @@ keyrox-ctl revive
 
 ```
 keyrox-ctl/
-├── Makefile              # Сборка CLI-утилиты keyrox-ctl
+├── .github/workflows/    # CI/CD: автоматическая сборка и тесты на macOS
+├── Makefile              # Сборка CLI-утилиты, демона и запуск тестов (make test)
 ├── keyrox_hid.c / .h     # Ядро взаимодействия с macOS IOKit HID Manager
 ├── keyrox_proto.c / .h   # Реализация бинарного протокола GK8911M
 ├── keyrox_keys.h         # Таблица скан-кодов и раскладки 87 клавиш TKL
-├── main.c                # Точка входа консольной утилиты
+├── keyrox_reset.m / .h   # Низкоуровневый аппаратный сброс шины USB (IOUSBHost)
+├── main.c                # Точка входа консольной утилиты keyrox-ctl
+├── daemon/               # Фоновый системный Watchdog (LaunchAgent 24/7)
+│   ├── keyrox-watchdog.m # Демон защиты от зависаний при выходе из сна
+│   └── io.github.sl1mus.keyrox-watchdog.plist
+├── tests/                # Модульные тесты протокола HID (make test)
+│   └── test_proto.c
 ├── gui/
 │   ├── Makefile          # Сборка Keyrox.app (Mach-O + WebKit bundle)
 │   ├── Info.plist        # Метаданные бандла приложения
@@ -146,8 +153,15 @@ keyrox-ctl/
 
 ---
 
+## 👥 Авторы и контрибьюторы (Contributors)
+
+* **[@sl1mus](https://github.com/sl1mus)** — Автор проекта, реверс-инжиниринг протокола GK8911M, архитектура нативного macOS интерфейса и драйвера.
+* **[Antigravity Agent](https://github.com/apps/antigravity-sl1mus) ([@antigravity-sl1mus[bot]](https://github.com/apps/antigravity-sl1mus))** — AI-ассистент разработки: модульный тестовый сьют протокола (`tests/test_proto.c`), устранение багов RunLoop/GCD в Watchdog Daemon, автоматизация CI (GitHub Actions) и ревью кода.
+
+---
+
 ## 🤝 Вклад в проект (Contributing)
-Пулл-реквесты, issue и предложения приветствуются! Если у вас другая модель Red Square (Keyrox Classic, Keyrox 60%, Redeemer) или другая версия прошивки — присылайте дампы и фидбек!
+Пулл-реквесты, issue и предложения приветствуются! Если у вас другая модель Red Square (Keyrox Classic, Keyrox 60%, Redeemer) или другая версия прошивки — присылайте дампы и фидбек! Подробнее в [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

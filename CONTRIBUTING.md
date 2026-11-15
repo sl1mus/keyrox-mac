@@ -65,6 +65,14 @@ While this project was developed and verified on the **Red Square Keyrox TKL** (
    ```bash
    git checkout -b feature/my-cool-feature
    ```
-2. Test your changes locally (`make universal` and `make -C gui universal`).
+2. Test your changes locally (`make test` and `make universal`).
 3. Commit with descriptive messages (e.g. `feat: add support for PID 0x2512`).
 4. Push to your fork and submit a Pull Request.
+
+---
+
+## 👥 Contributors
+
+* **[sl1mus](https://github.com/sl1mus)** — Project author & maintainer.
+* **[Antigravity Agent](https://github.com/apps/antigravity-sl1mus)** (`antigravity-sl1mus[bot]`) — Autonomous AI coding assistant.
+
