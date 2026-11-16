@@ -249,9 +249,28 @@ int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, siz
     return keyrox_send_packet(dev, &pkt);
 }
 
+int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, uint8_t g, uint8_t b) {
+    if (!dev) return -1;
+    /* 9-byte mode parameters block: [brightness, flags, flags, R, G, B, bgR, bgG, bgB] */
+    uint8_t params[9] = { 0x7f, 0x40, 0x34, r, g, b, 0x00, 0x00, 0x00 };
+    uint32_t offset = (uint32_t)mode * 9;
+    keyrox_packet_t pkt;
+    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, params, 9);
+    int rc = keyrox_send_packet(dev, &pkt);
+    if (rc == 0) {
+        /* Re-apply mode so the MCU activates the new color immediately in RAM */
+        keyrox_set_mode(dev, mode, KEYROX_DIR_LEFT);
+    }
+    return rc;
+}
+
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
     if (!dev) return -1;
 
+    /* 1. Set mode 0 (Const) color table in MCU EEPROM */
+    keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b);
+
+    /* 2. Also stream per-key matrix */
     keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
     for (size_t i = 0; i < KEYROX_TKL_KEY_COUNT; ++i) {
         colors[i].r = r;
