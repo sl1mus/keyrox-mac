@@ -100,25 +100,40 @@ keyrox-ctl revive
 
 ---
 
+## ⌨️ Аппаратные комбинации клавиш (Встроенное управление Fn)
+
+В прошивке контроллера Red Square Keyrox TKL (GK8911M / JUCHEN) аппаратно зашиты следующие сочетания клавиш (работают независимо от ОС и драйверов):
+
+| Комбинация | Действие | Описание |
+|---|---|---|
+| **`Fn + ESC`** | **Мастер-питание LED** | Полное включение / выключение подсветки (аппаратный тумблер) |
+| **`Fn + PRTSC`** *(Print Screen)* | **Динамические режимы** | Циклическое переключение эффектов (волна, дыхание, спектр и др.) |
+| **`Fn + HOME`** | **Статичные цвета** | Переключение базовых цветов постоянного свечения (Const mode) |
+| **`Fn + PAUSE`** | **Пользовательские зоны** | Переключение встроенных игровых профилей (WASD, стрелки и др.) |
+| **`Fn + ↑` / `Fn + ↓`** | **Яркость подсветки** | Увеличение / уменьшение скважности аппаратного ШИМ (0..100%) |
+| **`Fn + ←` / `Fn + →`** | **Скорость эффектов** | Изменение скорости динамических анимаций |
+| **`Fn + DEL`** *(удержание 3–5 сек)* | **Factory Reset** | Аппаратный сброс параметров контроллера до заводских настроек |
+
+---
+
 ## 🔬 Технические подробности протокола (Reverse Engineering)
 
-В ходе реверс-инжиниринга оригинальной Windows-утилиты (`Skin.dll`, `res.dll`) и сниффинга USB-пакетов было установлено:
-- **Устройство:** USB Composite Device, Vendor ID `0x1A2C`, Product ID `0x2511`.
-- **Интерфейс:** Custom Vendor-Defined HID Collection (`Usage Page: 0xFF00`, `Usage: 0x0001`).
+В ходе реверс-инжиниринга оригинального исполняемого файла `KeyroxTKLSkeleton.exe` и анализа USB HID дескрипторов было установлено:
+- **Устройство:** USB Composite Device, Vendor ID `0x1A2C`, Product ID `0x2511` (V2) / `0x1511` (V1).
+- **Интерфейс:** Custom Vendor-Defined HID Collection (`Usage Page: 0xFF00`, `Usage: 0x0002`).
 - **Транспорт:** HID Feature Reports через `IOHIDDeviceSetReport` / `IOHIDDeviceGetReport`.
-- **Размер пакета:** 65 байт (1 байт Report ID `0x04` + 64 байта полезной нагрузки).
-- **Структура пакета:**
+- **Размер пакета:** Ровно 520 байт (Report ID отсутствует в дескрипторе HID).
+- **Структура пакета на шине (Wire Layout):**
   ```c
   typedef struct __attribute__((packed)) {
-      uint8_t  magic;       /* 0xA5 */
-      uint8_t  cmd;         /* Command ID (0x02: Info, 0x03: Mode, 0x04: Remap, 0x07: LED, 0x09: Save) */
-      uint8_t  subcmd;      /* Subcommand */
-      uint8_t  len;         /* Payload byte length */
-      uint32_t offset;      /* Memory/Key offset (Big-Endian) */
-      uint8_t  data[52];    /* Payload data */
-      uint8_t  checksum;    /* 8-bit sum over bytes [0..62] */
+      uint32_t offset;                   /* Смещение в памяти EEPROM/Flash (Little-Endian, 4 байта) */
+      uint16_t len;                      /* Длина полезной нагрузки (Little-Endian, 2 байта) */
+      uint8_t  cmd;                      /* Код команды (0x01: Info, 0x04: Profile, 0x06: Bright, 0x08: Mode, 0x09: Save) */
+      uint8_t  subcmd;                   /* Подкоманда (1 байт) */
+      uint8_t  data[KEYROX_PAYLOAD_MAX]; /* Полезная нагрузка (до 512 байт) */
   } keyrox_packet_t;
   ```
+- **Особенности контроллера JUCHEN:** Попытка чтения неподдерживаемых опкодов или непредусмотренных таблиц вводит USB-стек контроллера в состояние `PIPE_STALL` (`0xe00002d6`), блокируя опрос матрицы клавиш. Все мутирующие команды (`SetMode`, `SetBrightness`, `SetSpeed`) передаются исключительно прямыми одиночными пакетами записи.
 
 ---
 
