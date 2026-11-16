@@ -78,7 +78,24 @@ keyrox_device_t *keyrox_open(void) {
     IOHIDDeviceRef dev_ref = NULL;
     const void *values[count];
     CFSetGetValues(dev_set, values);
-    dev_ref = (IOHIDDeviceRef)values[0];
+
+    /* Specifically select Vendor Control Interface (UsagePage 0xFF00 / 65280).
+     * Picking values[0] at random could select mouse (usage 1:2) or standard keyboard (usage 1:6),
+     * which reject vendor 64-byte feature reports with 0xe00002d6.
+     */
+    for (CFIndex i = 0; i < count; i++) {
+        IOHIDDeviceRef candidate = (IOHIDDeviceRef)values[i];
+        long page = 0;
+        CFNumberRef np = (CFNumberRef)IOHIDDeviceGetProperty(candidate, CFSTR(kIOHIDPrimaryUsagePageKey));
+        if (np) CFNumberGetValue(np, kCFNumberLongType, &page);
+        if (page == 0xff00 || page == 65280) {
+            dev_ref = candidate;
+            break;
+        }
+    }
+    if (!dev_ref) {
+        dev_ref = (IOHIDDeviceRef)values[0];
+    }
     CFRetain(dev_ref);
     CFRelease(dev_set);
 
@@ -256,28 +273,19 @@ int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_
     /* Mode parameter offset in MCU memory is strictly (mode * 9) */
     uint32_t offset = (uint32_t)(mode * 9);
 
-    /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB] */
+    /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB]
+     * Do NOT send read packets before write (GK8911M stalls on read 0x85).
+     */
     uint8_t params[9] = { 0x7f, 0x40, 0x34, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b };
-    uint8_t cur_params[9];
-    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, offset, cur_params, 9) == 0) {
-        params[0] = cur_params[0]; /* Preserve brightness */
-        params[1] = cur_params[1]; /* Preserve flags */
-        params[2] = cur_params[2]; /* Preserve speed */
-    }
-
-    params[3] = fg_r;
-    params[4] = fg_g;
-    params[5] = fg_b;
-    params[6] = bg_r;
-    params[7] = bg_g;
-    params[8] = bg_b;
 
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, params, 9);
     int rc = keyrox_send_packet(dev, &pkt);
     if (rc == 0) {
+        usleep(30000);
         /* Re-apply mode so the MCU activates the new color immediately in RAM */
         keyrox_set_mode(dev, mode, KEYROX_DIR_LEFT);
+        usleep(30000);
         /* Commit to hardware Flash memory */
         keyrox_save_settings(dev);
     }
@@ -298,7 +306,9 @@ int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
      */
     int rc = keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b);
     if (rc == 0) {
+        usleep(30000);
         keyrox_set_mode(dev, KEYROX_MODE_CONST, KEYROX_DIR_LEFT);
+        usleep(30000);
         keyrox_save_settings(dev);
     }
     return rc;
@@ -325,39 +335,25 @@ int keyrox_set_key_color(keyrox_device_t *dev, uint8_t key_index, uint8_t r, uin
 int keyrox_restore_default_modes(keyrox_device_t *dev) {
     if (!dev) return -1;
 
-    /* Factory default colors for all 18 GK8911M modes */
-    static const uint8_t default_table[18][9] = {
-        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 0: Const (Cyan) */
-        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 1: Wave (Rainbow) */
-        { 0x7f, 0x40, 0x34, 0x00, 0x80, 0xff, 0x00, 0x00, 0x00 }, /* 2: Cross (Sky Blue) */
-        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0x80, 0x00, 0x00, 0x00 }, /* 3: Point (Mint) */
-        { 0x7f, 0x40, 0x34, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 4: Custom (White) */
-        { 0x7f, 0xff, 0x34, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 5: Stars (Yellow) */
-        { 0x7f, 0xff, 0x34, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 6: Snow (White) */
-        { 0x7f, 0xff, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 7: Rain (Cyan) */
-        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 8: Spectrum (Cycle) */
-        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 9: Breathe (Cyan) */
-        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 10: Line (Green) */
-        { 0x7f, 0x40, 0x34, 0xff, 0x00, 0xff, 0x00, 0x00, 0x00 }, /* 11: Plumflower (Magenta) */
-        { 0x7f, 0x40, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 12: Heartrate (Red) */
-        { 0x7f, 0x40, 0x34, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 13: Shoot (Yellow) */
-        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 14: Rotate (Dynamic) */
-        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 15: Cone (Dynamic) */
-        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 16: Diffusion (Cyan) */
-        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }  /* 17: Close (Off) */
-    };
+    /* Reset Mode 0 (Const) to turquoise */
+    uint8_t mode0[9] = { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 };
+    keyrox_packet_t pkt;
+    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, 0, mode0, 9);
+    keyrox_send_packet(dev, &pkt);
+    usleep(50000);
 
-    for (uint8_t m = 0; m < 18; ++m) {
-        uint32_t offset = (uint32_t)(m * 9);
-        keyrox_packet_t pkt;
-        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, default_table[m], 9);
-        keyrox_send_packet(dev, &pkt);
-        usleep(15000); /* Pacing between table writes */
-    }
+    /* Reset Mode 1 (Wave) */
+    uint8_t mode1[9] = { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, 9, mode1, 9);
+    keyrox_send_packet(dev, &pkt);
+    usleep(50000);
 
     keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
+    usleep(50000);
     keyrox_set_brightness(dev, 4);
+    usleep(50000);
     keyrox_set_speed(dev, 2);
+    usleep(50000);
     keyrox_save_settings(dev);
     return 0;
 }
