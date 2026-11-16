@@ -270,16 +270,16 @@ int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, siz
 int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_r, uint8_t fg_g, uint8_t fg_b, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {
     if (!dev) return -1;
 
-    /* Mode parameter index in MCU memory is strictly (mode) 0..17, NOT byte offset */
-    uint32_t offset = (uint32_t)mode;
-
     /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB]
-     * Do NOT send read packets before write (GK8911M stalls on read 0x85).
+     * In GK8911M wire protocol (confirmed by Windows disassembly at 0x41a5be):
+     * - subcmd = mode index (0..17)
+     * - offset = 0
+     * - len = 9
      */
     uint8_t params[9] = { 0x7f, 0x40, 0x34, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b };
 
     keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, params, 9);
+    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, (uint8_t)mode, 0, params, 9);
     int rc = keyrox_send_packet(dev, &pkt);
     if (rc == 0) {
         usleep(30000);
@@ -362,7 +362,7 @@ int keyrox_restore_default_modes(keyrox_device_t *dev) {
 
     for (uint8_t m = 0; m < 18; ++m) {
         keyrox_packet_t pkt;
-        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)m, default_table[m], 9);
+        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, m, 0, default_table[m], 9);
         keyrox_send_packet(dev, &pkt);
         usleep(30000); /* 30ms pacing for Flash write cycle */
     }
@@ -387,17 +387,19 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
     }
     if (out_mode) *out_mode = (keyrox_mode_t)mode_val;
 
-    /* 2. Read Profile (1 byte) */
-    uint8_t profile_val = 1;
+    /* 2. Read Profile (1 byte, 0-based on wire 0..4, user-facing 1..5) */
+    uint8_t profile_val = 0;
     if (keyrox_read_packet(dev, KEYROX_CMD_PROFILE, 0, 0, &profile_val, 1) == 0) {
-        if (out_profile) *out_profile = profile_val;
+        if (out_profile) *out_profile = profile_val + 1;
     }
 
-    /* 3. Read Brightness & Speed via safe 1-byte register reads (CMD_06)
-     * Do NOT read CMD_05 (0x85) here as repeated reads cause USB endpoint stalls on GK8911M!
+    /* 3. Read Brightness & Speed from current mode parameters block (CMD_05, len 9)
+     * GK8911M stores brightness in byte 0 (0..127) and speed in byte 2 (0..4) of mode block.
+     * Reading CMD_05 with subcmd=current_mode is fast, reliable, and does not stall the USB endpoint.
      */
-    uint8_t raw_bright = 127;
-    if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &raw_bright, 1) == 0) {
+    uint8_t cur_params[9] = {0};
+    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, mode_val, 0, cur_params, 9) == 0) {
+        uint8_t raw_bright = cur_params[0];
         if (out_bright) {
             if (raw_bright == 0) *out_bright = 0;
             else if (raw_bright < 48) *out_bright = 1;
@@ -405,14 +407,12 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
             else if (raw_bright < 112) *out_bright = 3;
             else *out_bright = 4;
         }
+        uint8_t raw_speed = cur_params[2];
+        if (out_speed) {
+            *out_speed = raw_speed > 4 ? 4 : raw_speed;
+        }
     } else {
         if (out_bright) *out_bright = 4;
-    }
-
-    uint8_t raw_speed = 2;
-    if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &raw_speed, 1) == 0) {
-        if (out_speed) *out_speed = raw_speed > 4 ? 4 : raw_speed;
-    } else {
         if (out_speed) *out_speed = 2;
     }
 
