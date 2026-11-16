@@ -229,9 +229,24 @@ int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level) {
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed) {
     if (!dev) return -1;
     if (speed > 4) speed = 4;
+
+    /* 1. Send CMD_SPEED_BRIGHT (0x06, subcmd 1) */
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &speed, 1);
-    return keyrox_send_packet(dev, &pkt);
+    int rc = keyrox_send_packet(dev, &pkt);
+
+    /* 2. Also update speed in current mode's config table (CMD 0x05) */
+    uint8_t cur_mode = 0;
+    if (keyrox_read_packet(dev, KEYROX_CMD_MODE, 0, 0, &cur_mode, 1) == 0 && cur_mode < KEYROX_MODE_COUNT) {
+        uint8_t mode_params[9] = {0};
+        if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9) == 0) {
+            mode_params[2] = (mode_params[2] & ~0x07) | (speed & 0x07);
+            keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9);
+            keyrox_send_packet(dev, &pkt);
+        }
+    }
+
+    return rc;
 }
 
 int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile) {
