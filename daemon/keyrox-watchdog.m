@@ -16,6 +16,9 @@ static IOPMAssertionID gSystemAssertionID = kIOPMNullAssertionID;
 static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
 static BOOL gDisplayIsSleeping = NO;
+static uint8_t gSavedBrightness = 4;
+static BOOL gBacklightTurnedOffForSleep = NO;
+static io_object_t gDisplayWranglerNotifier = 0;
 
 static void logMessage(const char *format, ...) {
     char timestamp[32] = {0};
@@ -57,6 +60,39 @@ static void releasePowerAssertions(void) {
     }
 }
 
+static void turnOffBacklightForSleep(void) {
+    if (gBacklightTurnedOffForSleep) return;
+    keyrox_device_t *dev = keyrox_open();
+    if (dev) {
+        keyrox_mode_t mode = KEYROX_MODE_CONST;
+        uint8_t bright = 0, speed = 0, profile = 1;
+        char fw[64] = {0};
+        if (keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw)) == 0) {
+            if (bright > 0) {
+                gSavedBrightness = bright;
+            }
+        }
+        keyrox_set_brightness(dev, 0);
+        keyrox_close(dev);
+        gBacklightTurnedOffForSleep = YES;
+        logMessage("🌙 [Display Sleep] Keyboard backlight dimmed to 0 (saved level: %u) to prevent USB brownout!", gSavedBrightness);
+    }
+}
+
+static void restoreBacklightAfterWake(void) {
+    if (!gBacklightTurnedOffForSleep) return;
+    keyrox_device_t *dev = keyrox_open();
+    if (dev) {
+        uint8_t target = gSavedBrightness > 0 ? gSavedBrightness : 4;
+        keyrox_set_brightness(dev, target);
+        keyrox_close(dev);
+        gBacklightTurnedOffForSleep = NO;
+        logMessage("📺 [Display Wake] Restored keyboard backlight to level %u!", target);
+    }
+}
+
+static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument);
+
 static void reviveKeyboard(const char *reason) {
     logMessage("⚡ Auto-Revive triggered (reason: %s). Issuing USB Bus Reset...", reason);
     int rc = keyrox_usb_bus_reset();
@@ -70,10 +106,10 @@ static void reviveKeyboard(const char *reason) {
         keyrox_device_t *kdev = keyrox_open();
         if (kdev) {
             keyrox_set_mode(kdev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-            keyrox_set_brightness(kdev, 4);
+            keyrox_set_brightness(kdev, gSavedBrightness > 0 ? gSavedBrightness : 4);
             keyrox_close(kdev);
             gKeyboardConnected = YES;
-            logMessage("[+] Keyboard revived and initialized to Wave mode (Brightness: 4)!");
+            logMessage("[+] Keyboard revived and initialized to Wave mode (Brightness: %u)!", gSavedBrightness > 0 ? gSavedBrightness : 4);
         } else {
             logMessage("[!] USB Reset completed, waiting for kernel HID event driver.");
         }
@@ -116,15 +152,30 @@ static void checkKeyboardHealth(void) {
         gKeyboardConnected = YES;
 
         // Auto-configure default lighting if freshly plugged in
-        keyrox_device_t *init_dev = keyrox_open();
-        if (init_dev) {
-            keyrox_set_mode(init_dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-            keyrox_set_brightness(init_dev, 4);
-            keyrox_close(init_dev);
-            logMessage("[+] Initialized reconnected keyboard to Wave mode (Brightness: 4)");
+        if (!gDisplayIsSleeping) {
+            keyrox_device_t *init_dev = keyrox_open();
+            if (init_dev) {
+                keyrox_set_mode(init_dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
+                keyrox_set_brightness(init_dev, gSavedBrightness > 0 ? gSavedBrightness : 4);
+                keyrox_close(init_dev);
+                logMessage("[+] Initialized reconnected keyboard to Wave mode (Brightness: %u)", gSavedBrightness > 0 ? gSavedBrightness : 4);
+            }
         }
     } else if (gDisplayIsSleeping) {
         logMessage("🌙 [Screen Asleep] Heartbeat OK: Keyrox TKL responsive (FW: %s)", fw[0] ? fw : "GK8911M");
+    }
+}
+
+static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument) {
+    (void)refcon; (void)service; (void)messageArgument;
+    if (messageType == 0xe0000280 /* kIOMessageDeviceWillPowerOff */ ||
+        messageType == 0xe0000270 /* kIOMessageCanDevicePowerOff */) {
+        gDisplayIsSleeping = YES;
+        turnOffBacklightForSleep();
+    } else if (messageType == 0xe0000250 /* kIOMessageDeviceHasPoweredOn */) {
+        gDisplayIsSleeping = NO;
+        restoreBacklightAfterWake();
+        checkKeyboardHealth();
     }
 }
 
@@ -143,16 +194,31 @@ int main(int argc, const char *argv[]) {
             return 0;
         }
 
-        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.2 (System Keep-Alive + 10s Heartbeat)");
+        // Initialize NSApplication for Cocoa/WindowServer event delivery
+        [NSApplication sharedApplication];
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
+
+        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.3 (Smart Backlight Sleep Sync + 10s Heartbeat)");
         logMessage("Target: VID 0x1A2C, PID 0x2511 / 0x1511 (Red Square Keyrox TKL)");
-        logMessage("Mode: Display Sleep allowed (Screen will sleep normally)");
+        logMessage("Mode: Display Sleep allowed (Backlight dims to 0 on sleep, restores on wake)");
 
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
 
         createPowerAssertions();
 
-        // Register for Display Sleep & Wake notifications
+        // Register for IODisplayWrangler hardware power notifications (kernel-level)
+        IONotificationPortRef notifyPort = IONotificationPortCreate(kIOMainPortDefault);
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), IONotificationPortGetRunLoopSource(notifyPort), kCFRunLoopDefaultMode);
+
+        io_service_t wrangler = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IODisplayWrangler"));
+        if (wrangler) {
+            IOServiceAddInterestNotification(notifyPort, wrangler, kIOGeneralInterest, DisplayWranglerCallback, NULL, &gDisplayWranglerNotifier);
+            IOObjectRelease(wrangler);
+            logMessage("[+] IODisplayWrangler kernel power listener registered");
+        }
+
+        // Also register Cocoa NSWorkspace notifications
         NSNotificationCenter *wsCenter = [[NSWorkspace sharedWorkspace] notificationCenter];
 
         [wsCenter addObserverForName:NSWorkspaceScreensDidSleepNotification
@@ -161,7 +227,7 @@ int main(int argc, const char *argv[]) {
                           usingBlock:^(NSNotification *note) {
             (void)note;
             gDisplayIsSleeping = YES;
-            logMessage("🌙 Display went to sleep (NSWorkspaceScreensDidSleepNotification). Heartbeat active.");
+            turnOffBacklightForSleep();
         }];
 
         [wsCenter addObserverForName:NSWorkspaceScreensDidWakeNotification
@@ -170,7 +236,7 @@ int main(int argc, const char *argv[]) {
                           usingBlock:^(NSNotification *note) {
             (void)note;
             gDisplayIsSleeping = NO;
-            logMessage("📺 Display woke up (NSWorkspaceScreensDidWakeNotification)");
+            restoreBacklightAfterWake();
             createPowerAssertions();
             checkKeyboardHealth();
         }];
@@ -201,7 +267,7 @@ int main(int argc, const char *argv[]) {
         });
         dispatch_resume(gTimer);
 
-        // Run Cocoa runloop for NSWorkspace notifications
+        // Run Cocoa runloop for notifications
         [[NSRunLoop currentRunLoop] run];
     }
     return 0;
