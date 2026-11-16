@@ -13,7 +13,9 @@ static void print_usage(const char *prog) {
     printf("  %s mode <name|0..19>         Set lighting mode\n", prog);
     printf("  %s brightness <0..4>         Set backlight brightness level\n", prog);
     printf("  %s speed <0..4>              Set lighting animation speed\n", prog);
-    printf("  %s color <#RRGGBB|R,G,B>     Set custom/static RGB color\n", prog);
+    printf("  %s color <#RRGGBB|R,G,B>     Set static single color (const mode 0)\n", prog);
+    printf("  %s mode-color <mode> <#RGB>  Set foreground color for specific mode\n", prog);
+    printf("  %s reset-modes               Restore factory default colors for all 18 modes\n", prog);
     printf("  %s profile <1..5>            Switch active profile\n", prog);
     printf("  %s on                        Turn backlight on (restore PWM, mode preserved)\n", prog);
     printf("  %s off                       Turn backlight off (0%% PWM, mode preserved)\n", prog);
@@ -295,14 +297,51 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "[-] Invalid color format: '%s'. Use #RRGGBB or R,G,B\n", argv[2]);
                 rc = 1;
             } else {
-                printf("[*] Setting matrix color to #%02X%02X%02X...\n", r, g, b);
+                printf("[*] Setting static color (mode 0) to #%02X%02X%02X...\n", r, g, b);
                 if (keyrox_set_color(dev, r, g, b) == 0) {
-                    printf("[+] Color applied to keyboard matrix\n");
+                    printf("[+] Color applied to keyboard matrix (Mode Const)\n");
                 } else {
                     fprintf(stderr, "[-] Failed to apply color\n");
                     rc = 1;
                 }
             }
+        }
+    } else if (strcmp(cmd, "mode-color") == 0) {
+        if (argc < 4) {
+            fprintf(stderr, "[-] Usage: %s mode-color <mode_name|0..17> <#RRGGBB> [bg_#RRGGBB]\n", argv[0]);
+            rc = 1;
+        } else {
+            int mode_idx = keyrox_string_to_mode(argv[2]);
+            if (mode_idx < 0) {
+                fprintf(stderr, "[-] Unknown mode: '%s'\n", argv[2]);
+                rc = 1;
+            } else {
+                uint8_t fg_r, fg_g, fg_b, bg_r = 0, bg_g = 0, bg_b = 0;
+                if (parse_color(argv[3], &fg_r, &fg_g, &fg_b) != 0) {
+                    fprintf(stderr, "[-] Invalid foreground color: '%s'\n", argv[3]);
+                    rc = 1;
+                } else {
+                    if (argc >= 5) {
+                        parse_color(argv[4], &bg_r, &bg_g, &bg_b);
+                    }
+                    printf("[*] Setting color for mode %s (%d) to #%02X%02X%02X...\n",
+                           keyrox_mode_to_string((keyrox_mode_t)mode_idx), mode_idx, fg_r, fg_g, fg_b);
+                    if (keyrox_set_mode_colors(dev, (keyrox_mode_t)mode_idx, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b) == 0) {
+                        printf("[+] Mode color updated and saved\n");
+                    } else {
+                        fprintf(stderr, "[-] Failed to set mode color\n");
+                        rc = 1;
+                    }
+                }
+            }
+        }
+    } else if (strcmp(cmd, "reset-modes") == 0) {
+        printf("[*] Restoring factory default colors for all 18 modes in EEPROM...\n");
+        if (keyrox_restore_default_modes(dev) == 0) {
+            printf("[+] All 18 modes restored to factory defaults and saved to Flash!\n");
+        } else {
+            fprintf(stderr, "[-] Failed to restore default modes\n");
+            rc = 1;
         }
     } else if (strcmp(cmd, "profile") == 0) {
         if (argc < 3) {

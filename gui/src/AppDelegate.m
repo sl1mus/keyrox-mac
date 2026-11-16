@@ -236,14 +236,7 @@
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 
-    // Start background status poller (every 2.5 seconds)
-    _pollTimer = [NSTimer scheduledTimerWithTimeInterval:2.5
-                                                  target:self
-                                                selector:@selector(checkDeviceStatus)
-                                                userInfo:nil
-                                                 repeats:YES];
-    
-    // Initial check right away
+    // Initial status query on startup (no periodic 2.5s polling to avoid USB packet collisions)
     [self checkDeviceStatus];
     [self setupWakeWatchdog];
     [self checkWatchdogStatus];
@@ -583,25 +576,14 @@
             keyrox_set_key_color(dev, (uint8_t)keyIdx, (uint8_t)r, (uint8_t)g, (uint8_t)b);
         }
         else if ([action isEqualToString:@"setMultipleKeysColor"]) {
-            NSArray *keys = dict[@"keys"];
             int r = [dict[@"r"] intValue];
             int g = [dict[@"g"] intValue];
             int b = [dict[@"b"] intValue];
-            if (keys.count >= KEYROX_TKL_KEY_COUNT) {
-                /* Optimization: stream all keys in 1 fast packet */
-                keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
-                for (size_t i = 0; i < KEYROX_TKL_KEY_COUNT; ++i) {
-                    colors[i].r = (uint8_t)r;
-                    colors[i].g = (uint8_t)g;
-                    colors[i].b = (uint8_t)b;
-                    colors[i].brightness = 0xFF;
-                }
-                keyrox_stream_matrix(dev, colors, KEYROX_TKL_KEY_COUNT);
-            } else {
-                for (NSNumber *num in keys) {
-                    keyrox_set_key_color(dev, (uint8_t)[num intValue], (uint8_t)r, (uint8_t)g, (uint8_t)b);
-                }
-            }
+            /* Apply color across keyboard matrix via Mode Const (0) */
+            keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"💡 Статичный цвет установлен на всю клавиатуру. (Индивидуальные зоны клавиш настраиваются аппаратно через Fn + Pause)"}];
+            });
         }
         else if ([action isEqualToString:@"setKeyRemap"]) {
             int keyIdx = [dict[@"keyIndex"] intValue];
@@ -618,12 +600,13 @@
             keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
             keyrox_set_brightness(dev, 4);
             keyrox_set_speed(dev, 2);
+            keyrox_save_settings(dev);
         }
-        else if ([action isEqualToString:@"resetLedCustom"]) {
-            for (int i = 0; i < 87; i++) {
-                keyrox_set_key_color(dev, (uint8_t)i, 0, 0, 0);
-                usleep(1000);
-            }
+        else if ([action isEqualToString:@"resetLedCustom"] || [action isEqualToString:@"restoreDefaultModes"]) {
+            keyrox_restore_default_modes(dev);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"🌈 Заводские цвета всех 18 режимов успешно восстановлены!"}];
+            });
         }
         else if ([action isEqualToString:@"saveSettings"]) {
             keyrox_save_settings(dev);
@@ -635,13 +618,14 @@
             keyrox_set_brightness(dev, 4);
         }
         else if ([action isEqualToString:@"restoreDefaults"]) {
+            keyrox_restore_default_modes(dev);
             keyrox_set_profile(dev, 0);
-            keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-            keyrox_set_brightness(dev, 4);
-            keyrox_set_speed(dev, 2);
             keyrox_reset_remap(dev);
             keyrox_reset_macro(dev);
             keyrox_save_settings(dev);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"⚙️ Заводские настройки клавиатуры полностью восстановлены!"}];
+            });
         }
     });
 }

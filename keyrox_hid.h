@@ -32,6 +32,7 @@ int keyrox_set_key_remap(keyrox_device_t *dev, uint8_t key_index, uint16_t targe
 int keyrox_reset_remap(keyrox_device_t *dev);
 int keyrox_reset_macro(keyrox_device_t *dev);
 int keyrox_save_settings(keyrox_device_t *dev);
+int keyrox_restore_default_modes(keyrox_device_t *dev);
 int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *out_bright, uint8_t *out_speed, uint8_t *out_profile, char *fw_version, size_t fw_ver_len);
 
 #endif /* KEYROX_HID_H */

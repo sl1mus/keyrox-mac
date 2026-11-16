@@ -747,7 +747,7 @@
     state.keyCustomColors.clear();
     document.querySelectorAll('.keycap').forEach(el => el.style.backgroundColor = '');
     sendToNative({ action: 'resetLedCustom' });
-    showToast('Поклавишная матрица очищена');
+    showToast('Заводские цвета всех 18 режимов восстановлены');
   });
 
   document.getElementById('btn-reset-macro-settings')?.addEventListener('click', () => {

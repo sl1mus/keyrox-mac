@@ -135,10 +135,13 @@ static void checkKeyboardHealth(void) {
     keyrox_close(dev);
 
     if (rc != 0) {
-        if (gKeyboardConnected) {
-            logMessage("[!] Keyrox TKL opened but failed status query (rc=%d), reviving...", rc);
-            gKeyboardConnected = NO;
-            reviveKeyboard("Status query failed");
+        // Do NOT call USB Bus Reset on transient query failure; another app/GUI could be accessing the HID interface.
+        static int consecutiveQueryFailures = 0;
+        consecutiveQueryFailures++;
+        if (consecutiveQueryFailures <= 2) {
+            logMessage("[~] Temporary status query contention (rc=%d, attempt %d/3)", rc, consecutiveQueryFailures);
+        } else if (consecutiveQueryFailures == 3) {
+            logMessage("[!] Consecutive status query failures (rc=%d). Retrying on next cycle.", rc);
         }
         return;
     }
