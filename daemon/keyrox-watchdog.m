@@ -17,6 +17,7 @@ static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
 static BOOL gDisplayIsSleeping = NO;
 static uint8_t gSavedBrightness = 4;
+static keyrox_mode_t gSavedMode = KEYROX_MODE_CONST;
 static BOOL gBacklightTurnedOffForSleep = NO;
 static io_object_t gDisplayWranglerNotifier = 0;
 
@@ -68,14 +69,17 @@ static void turnOffBacklightForSleep(void) {
         uint8_t bright = 0, speed = 0, profile = 1;
         char fw[64] = {0};
         if (keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw)) == 0) {
+            if (mode != KEYROX_MODE_OFF) {
+                gSavedMode = mode;
+            }
             if (bright > 0) {
                 gSavedBrightness = bright;
             }
         }
-        keyrox_set_brightness(dev, 0);
+        keyrox_set_mode(dev, KEYROX_MODE_OFF, KEYROX_DIR_LEFT);
         keyrox_close(dev);
         gBacklightTurnedOffForSleep = YES;
-        logMessage("🌙 [Display Sleep] Keyboard backlight dimmed to 0 (saved level: %u) to prevent USB brownout!", gSavedBrightness);
+        logMessage("🌙 [Display Sleep] Keyboard backlight turned OFF (saved mode: %s) to prevent USB brownout!", keyrox_mode_to_string(gSavedMode));
     }
 }
 
@@ -83,11 +87,11 @@ static void restoreBacklightAfterWake(void) {
     if (!gBacklightTurnedOffForSleep) return;
     keyrox_device_t *dev = keyrox_open();
     if (dev) {
-        uint8_t target = gSavedBrightness > 0 ? gSavedBrightness : 4;
-        keyrox_set_brightness(dev, target);
+        keyrox_mode_t target_mode = (gSavedMode != KEYROX_MODE_OFF) ? gSavedMode : KEYROX_MODE_CONST;
+        keyrox_set_mode(dev, target_mode, KEYROX_DIR_LEFT);
         keyrox_close(dev);
         gBacklightTurnedOffForSleep = NO;
-        logMessage("📺 [Display Wake] Restored keyboard backlight to level %u!", target);
+        logMessage("📺 [Display Wake] Restored keyboard backlight (mode: %s)!", keyrox_mode_to_string(target_mode));
     }
 }
 
