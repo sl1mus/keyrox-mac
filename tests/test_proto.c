@@ -17,9 +17,9 @@ static int g_tests_passed = 0;
 } while(0)
 
 TEST(test_packet_struct_size) {
-    /* Keyrox HID packet must be exactly 521 bytes (1 byte report_id + 8 byte header + 512 payload) */
+    /* Keyrox HID packet must be exactly 520 bytes (offset:4, len:2, cmd:1, subcmd:1, data:512) */
     assert(sizeof(keyrox_packet_t) == KEYROX_REPORT_SIZE);
-    assert(sizeof(keyrox_packet_t) == 521);
+    assert(sizeof(keyrox_packet_t) == 520);
 }
 
 TEST(test_packet_init_basic) {
@@ -27,13 +27,20 @@ TEST(test_packet_init_basic) {
     uint8_t payload[4] = {0x01, 0x02, 0x03, 0x04};
     keyrox_packet_init(&pkt, KEYROX_CMD_MODE, 0x01, 0x12345678, payload, sizeof(payload));
 
-    assert(pkt.report_id == 0x00);
     assert(pkt.cmd == KEYROX_CMD_MODE);
     assert(pkt.subcmd == 0x01);
     assert(pkt.offset == 0x12345678);
     assert(pkt.len == 4);
     assert(memcmp(pkt.data, payload, 4) == 0);
     assert(pkt.data[4] == 0x00); /* Rest should be zeroed */
+
+    /* Verify wire layout offsets */
+    uint8_t *raw = (uint8_t *)&pkt;
+    assert(raw[0] == 0x78 && raw[1] == 0x56 && raw[2] == 0x34 && raw[3] == 0x12); /* offset */
+    assert(raw[4] == 0x04 && raw[5] == 0x00); /* len */
+    assert(raw[6] == KEYROX_CMD_MODE); /* cmd */
+    assert(raw[7] == 0x01); /* subcmd */
+    assert(raw[8] == 0x01 && raw[9] == 0x02 && raw[10] == 0x03 && raw[11] == 0x04); /* data */
 }
 
 TEST(test_packet_init_payload_clamp) {
@@ -51,7 +58,6 @@ TEST(test_packet_init_null_data) {
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_DEV_INFO, 0, 0, NULL, 0);
 
-    assert(pkt.report_id == 0x00);
     assert(pkt.cmd == KEYROX_CMD_DEV_INFO);
     assert(pkt.len == 0);
 }
@@ -123,26 +129,21 @@ TEST(test_matrix_stream_packet) {
     }
 
     keyrox_matrix_packet_init(&pkt, colors, 87);
-    uint8_t *raw = (uint8_t *)&pkt;
 
-    /* Report ID */
-    assert(raw[0] == 0x00);
-    /* Streaming opcode header: B0 01 07 */
-    assert(raw[5] == KEYROX_CMD_MATRIX_STREAM);
-    assert(raw[5] == 0xB0);
-    assert(raw[6] == 0x01);
-    assert(raw[7] == 0x07);
+    assert(pkt.cmd == KEYROX_CMD_MATRIX_STREAM);
+    assert(pkt.cmd == 0xB0);
+    assert(pkt.subcmd == 0x01);
+    assert(pkt.len == KEYROX_PAYLOAD_MAX);
 
-    /* First key (Esc, pos = 0) -> offset 8 */
-    assert(raw[8 + 0] == 1);
-    assert(raw[8 + 1] == 2);
-    assert(raw[8 + 2] == 3);
-    assert(raw[8 + 3] == 0x80);
+    /* First key (Esc, pos = 0) -> pkt.data[0..3] */
+    assert(pkt.data[0] == 1);
+    assert(pkt.data[1] == 2);
+    assert(pkt.data[2] == 3);
+    assert(pkt.data[3] == 0x80);
 
     /* Null pointer safety */
     keyrox_matrix_packet_init(&pkt, NULL, 0);
-    assert(raw[0] == 0x00);
-    assert(raw[5] == 0xB0);
+    assert(pkt.cmd == 0xB0);
 }
 
 int main(void) {

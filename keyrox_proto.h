@@ -11,7 +11,7 @@
 #define KEYROX_PID_V1          0x1511  /* Keyrox TKL V1 (Gateron / Outemu) */
 #define KEYROX_USAGE_PAGE      0xff00
 #define KEYROX_USAGE           0x0002
-#define KEYROX_REPORT_SIZE     521
+#define KEYROX_REPORT_SIZE     520
 #define KEYROX_PAYLOAD_MAX     512
 
 /* Command Opcodes */
@@ -65,15 +65,14 @@ typedef enum {
     KEYROX_DIR_ANTICLOCKWISE     = 1
 } keyrox_direction_t;
 
-/* Packet Layout (521 bytes total) */
+/* Packet Layout (520 bytes total wire format) */
 #pragma pack(push, 1)
 typedef struct {
-    uint8_t  report_id;  /* 0x00 */
-    uint16_t len;        /* Payload length in bytes (LE) */
-    uint8_t  cmd;        /* Command ID */
-    uint8_t  subcmd;     /* Subcommand / Index */
-    uint32_t offset;     /* Param / Offset (LE) */
-    uint8_t  data[KEYROX_PAYLOAD_MAX]; /* Payload buffer */
+    uint32_t offset;     /* Bytes 0..3: Param / Offset (LE) */
+    uint16_t len;        /* Bytes 4..5: Payload length in bytes (LE) */
+    uint8_t  cmd;        /* Byte 6: Command ID */
+    uint8_t  subcmd;     /* Byte 7: Subcommand / Index */
+    uint8_t  data[KEYROX_PAYLOAD_MAX]; /* Bytes 8..519: Payload buffer */
 } keyrox_packet_t;
 #pragma pack(pop)
 
