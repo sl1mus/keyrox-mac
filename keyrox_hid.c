@@ -270,8 +270,8 @@ int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, siz
 int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_r, uint8_t fg_g, uint8_t fg_b, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {
     if (!dev) return -1;
 
-    /* Mode parameter offset in MCU memory is strictly (mode * 9) */
-    uint32_t offset = (uint32_t)(mode * 9);
+    /* Mode parameter index in MCU memory is strictly (mode) 0..17, NOT byte offset */
+    uint32_t offset = (uint32_t)mode;
 
     /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB]
      * Do NOT send read packets before write (GK8911M stalls on read 0x85).
@@ -300,14 +300,17 @@ int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
     if (!dev) return -1;
 
     /* Setting static single color on GK8911M:
-     * 1. Write RGB to Mode 0 (KEYROX_MODE_CONST) entry at offset 0
+     * 1. Write RGB to Mode 0 (KEYROX_MODE_CONST) entry at index 0
      * 2. Switch mode to CONST
-     * 3. Commit to Flash
+     * 3. Ensure brightness is set to max (4/4)
+     * 4. Commit to Flash
      */
     int rc = keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b);
     if (rc == 0) {
         usleep(30000);
         keyrox_set_mode(dev, KEYROX_MODE_CONST, KEYROX_DIR_LEFT);
+        usleep(30000);
+        keyrox_set_brightness(dev, 4);
         usleep(30000);
         keyrox_save_settings(dev);
     }
@@ -335,25 +338,41 @@ int keyrox_set_key_color(keyrox_device_t *dev, uint8_t key_index, uint8_t r, uin
 int keyrox_restore_default_modes(keyrox_device_t *dev) {
     if (!dev) return -1;
 
-    /* Reset Mode 0 (Const) to turquoise */
-    uint8_t mode0[9] = { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 };
-    keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, 0, mode0, 9);
-    keyrox_send_packet(dev, &pkt);
-    usleep(50000);
+    /* Factory default mode parameters for all 18 GK8911M modes */
+    static const uint8_t default_table[18][9] = {
+        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 0: Const (Cyan) */
+        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 1: Wave (Rainbow) */
+        { 0x7f, 0x40, 0x34, 0x00, 0x80, 0xff, 0x00, 0x00, 0x00 }, /* 2: Cross (Sky Blue) */
+        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0x80, 0x00, 0x00, 0x00 }, /* 3: Point (Mint) */
+        { 0x7f, 0x40, 0x34, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 4: Custom (White) */
+        { 0x7f, 0xff, 0x34, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 5: Stars (Yellow) */
+        { 0x7f, 0xff, 0x34, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 6: Snow (White) */
+        { 0x7f, 0xff, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 7: Rain (Cyan) */
+        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 8: Spectrum (Cycle) */
+        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 9: Breathe (Cyan) */
+        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 10: Line (Green) */
+        { 0x7f, 0x40, 0x34, 0xff, 0x00, 0xff, 0x00, 0x00, 0x00 }, /* 11: Plumflower (Magenta) */
+        { 0x7f, 0x40, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 12: Heartrate (Red) */
+        { 0x7f, 0x40, 0x34, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }, /* 13: Shoot (Yellow) */
+        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 14: Rotate (Dynamic) */
+        { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 15: Cone (Dynamic) */
+        { 0x7f, 0x40, 0x34, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00 }, /* 16: Diffusion (Cyan) */
+        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }  /* 17: Close (Off) */
+    };
 
-    /* Reset Mode 1 (Wave) */
-    uint8_t mode1[9] = { 0x7f, 0xff, 0x34, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, 9, mode1, 9);
-    keyrox_send_packet(dev, &pkt);
-    usleep(50000);
+    for (uint8_t m = 0; m < 18; ++m) {
+        keyrox_packet_t pkt;
+        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)m, default_table[m], 9);
+        keyrox_send_packet(dev, &pkt);
+        usleep(30000); /* 30ms pacing for Flash write cycle */
+    }
 
     keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-    usleep(50000);
+    usleep(30000);
     keyrox_set_brightness(dev, 4);
-    usleep(50000);
+    usleep(30000);
     keyrox_set_speed(dev, 2);
-    usleep(50000);
+    usleep(30000);
     keyrox_save_settings(dev);
     return 0;
 }
@@ -374,26 +393,27 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
         if (out_profile) *out_profile = profile_val;
     }
 
-    /* 3. Read Mode Parameters Table (9 bytes) for active mode to get real brightness & speed */
-    if (mode_val < KEYROX_MODE_OFF) {
-        uint8_t mode_params[9] = {0};
-        if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode_val, mode_params, 9) == 0) {
-            uint8_t raw_bright = mode_params[0];
-            if (out_bright) {
-                if (raw_bright == 0) *out_bright = 0;
-                else if (raw_bright < 48) *out_bright = 1;
-                else if (raw_bright < 80) *out_bright = 2;
-                else if (raw_bright < 112) *out_bright = 3;
-                else *out_bright = 4;
-            }
-            if (out_speed) {
-                uint8_t spd = mode_params[2] & 0x07;
-                *out_speed = spd > 4 ? 4 : spd;
-            }
+    /* 3. Read Brightness & Speed via safe 1-byte register reads (CMD_06)
+     * Do NOT read CMD_05 (0x85) here as repeated reads cause USB endpoint stalls on GK8911M!
+     */
+    uint8_t raw_bright = 127;
+    if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &raw_bright, 1) == 0) {
+        if (out_bright) {
+            if (raw_bright == 0) *out_bright = 0;
+            else if (raw_bright < 48) *out_bright = 1;
+            else if (raw_bright < 80) *out_bright = 2;
+            else if (raw_bright < 112) *out_bright = 3;
+            else *out_bright = 4;
         }
     } else {
-        if (out_bright) *out_bright = 0;
-        if (out_speed) *out_speed = 0;
+        if (out_bright) *out_bright = 4;
+    }
+
+    uint8_t raw_speed = 2;
+    if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &raw_speed, 1) == 0) {
+        if (out_speed) *out_speed = raw_speed > 4 ? 4 : raw_speed;
+    } else {
+        if (out_speed) *out_speed = 2;
     }
 
     /* 4. Read Device Info (FW version) */
