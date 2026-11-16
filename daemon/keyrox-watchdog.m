@@ -17,7 +17,6 @@ static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
 static BOOL gDisplayIsSleeping = NO;
 static uint8_t gSavedBrightness = 4;
-static keyrox_mode_t gSavedMode = KEYROX_MODE_CONST;
 static BOOL gBacklightTurnedOffForSleep = NO;
 static io_object_t gDisplayWranglerNotifier = 0;
 
@@ -69,17 +68,14 @@ static void turnOffBacklightForSleep(void) {
         uint8_t bright = 0, speed = 0, profile = 1;
         char fw[64] = {0};
         if (keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw)) == 0) {
-            if (mode != KEYROX_MODE_OFF) {
-                gSavedMode = mode;
-            }
             if (bright > 0) {
                 gSavedBrightness = bright;
             }
         }
-        keyrox_set_mode(dev, KEYROX_MODE_OFF, KEYROX_DIR_LEFT);
+        keyrox_set_brightness(dev, 0);
         keyrox_close(dev);
         gBacklightTurnedOffForSleep = YES;
-        logMessage("🌙 [Display Sleep] Keyboard backlight turned OFF (saved mode: %s) to prevent USB brownout!", keyrox_mode_to_string(gSavedMode));
+        logMessage("🌙 [Display Sleep] Keyboard backlight dimmed to 0 (saved level: %u/4, mode preserved) to prevent USB brownout!", gSavedBrightness);
     }
 }
 
@@ -87,11 +83,11 @@ static void restoreBacklightAfterWake(void) {
     if (!gBacklightTurnedOffForSleep) return;
     keyrox_device_t *dev = keyrox_open();
     if (dev) {
-        keyrox_mode_t target_mode = (gSavedMode != KEYROX_MODE_OFF) ? gSavedMode : KEYROX_MODE_CONST;
-        keyrox_set_mode(dev, target_mode, KEYROX_DIR_LEFT);
+        uint8_t target = gSavedBrightness > 0 ? gSavedBrightness : 4;
+        keyrox_set_brightness(dev, target);
         keyrox_close(dev);
         gBacklightTurnedOffForSleep = NO;
-        logMessage("📺 [Display Wake] Restored keyboard backlight (mode: %s)!", keyrox_mode_to_string(target_mode));
+        logMessage("📺 [Display Wake] Restored keyboard backlight (level: %u/4, mode preserved)!", target);
     }
 }
 
@@ -154,16 +150,8 @@ static void checkKeyboardHealth(void) {
                    keyrox_mode_to_string(mode),
                    bright);
         gKeyboardConnected = YES;
-
-        // Auto-configure default lighting if freshly plugged in
-        if (!gDisplayIsSleeping) {
-            keyrox_device_t *init_dev = keyrox_open();
-            if (init_dev) {
-                keyrox_set_mode(init_dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-                keyrox_set_brightness(init_dev, gSavedBrightness > 0 ? gSavedBrightness : 4);
-                keyrox_close(init_dev);
-                logMessage("[+] Initialized reconnected keyboard to Wave mode (Brightness: %u)", gSavedBrightness > 0 ? gSavedBrightness : 4);
-            }
+        if (bright > 0) {
+            gSavedBrightness = bright;
         }
     } else if (gDisplayIsSleeping) {
         logMessage("🌙 [Screen Asleep] Heartbeat OK: Keyrox TKL responsive (FW: %s)", fw[0] ? fw : "GK8911M");

@@ -609,10 +609,10 @@
             keyrox_save_settings(dev);
         }
         else if ([action isEqualToString:@"turnOff"]) {
-            keyrox_set_mode(dev, KEYROX_MODE_OFF, KEYROX_DIR_LEFT);
+            keyrox_set_brightness(dev, 0);
         }
         else if ([action isEqualToString:@"turnOn"]) {
-            keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
+            keyrox_set_brightness(dev, 4);
         }
         else if ([action isEqualToString:@"restoreDefaults"]) {
             keyrox_set_profile(dev, 0);

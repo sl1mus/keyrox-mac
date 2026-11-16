@@ -15,8 +15,8 @@ static void print_usage(const char *prog) {
     printf("  %s speed <0..4>              Set lighting animation speed\n", prog);
     printf("  %s color <#RRGGBB|R,G,B>     Set custom/static RGB color\n", prog);
     printf("  %s profile <1..5>            Switch active profile\n", prog);
-    printf("  %s on                        Turn backlight on (const mode)\n", prog);
-    printf("  %s off                       Turn backlight off\n", prog);
+    printf("  %s on                        Turn backlight on (restore PWM, mode preserved)\n", prog);
+    printf("  %s off                       Turn backlight off (0%% PWM, mode preserved)\n", prog);
     printf("  %s save                      Commit current configuration to Flash/EEPROM\n", prog);
     printf("  %s watchdog                  Run foreground watchdog loop\n", prog);
     printf("  %s install-daemon            Install 24/7 background sleep protection LaunchAgent\n", prog);
@@ -324,17 +324,17 @@ int main(int argc, char *argv[]) {
             }
         }
     } else if (strcmp(cmd, "on") == 0) {
-        printf("[*] Turning backlight on (Const mode)...\n");
-        if (keyrox_set_mode(dev, KEYROX_MODE_CONST, KEYROX_DIR_LEFT) == 0) {
-            printf("[+] Backlight turned ON\n");
+        printf("[*] Turning backlight on (PWM restore)...\n");
+        if (keyrox_set_brightness(dev, 4) == 0) {
+            printf("[+] Backlight turned ON (Brightness: 4/4, active mode and colors preserved)\n");
         } else {
             fprintf(stderr, "[-] Failed to turn on backlight\n");
             rc = 1;
         }
     } else if (strcmp(cmd, "off") == 0) {
-        printf("[*] Turning backlight off...\n");
-        if (keyrox_set_mode(dev, KEYROX_MODE_OFF, KEYROX_DIR_LEFT) == 0) {
-            printf("[+] Backlight turned OFF\n");
+        printf("[*] Turning backlight off (PWM 0%%)...\n");
+        if (keyrox_set_brightness(dev, 0) == 0) {
+            printf("[+] Backlight turned OFF (Brightness: 0/4, active mode and colors preserved)\n");
         } else {
             fprintf(stderr, "[-] Failed to turn off backlight\n");
             rc = 1;
