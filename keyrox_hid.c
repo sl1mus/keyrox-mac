@@ -177,23 +177,6 @@ int keyrox_set_mode(keyrox_device_t *dev, keyrox_mode_t mode, keyrox_direction_t
     (void)dir;
     uint8_t mode_val = (uint8_t)mode;
 
-    /* If mode had 0 brightness in config table, initialize it to full brightness (127) */
-    uint8_t mode_params[9] = {0};
-    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode_val, mode_params, 9) == 0) {
-        if (mode_params[0] == 0 && mode != KEYROX_MODE_OFF) {
-            mode_params[0] = 127; /* Foreground brightness */
-            mode_params[1] = 127; /* Background brightness */
-            mode_params[2] = 0x32; /* Speed 2, default direction */
-            mode_params[3] = 0xFF; /* R */
-            mode_params[4] = 0xFF; /* G */
-            mode_params[5] = 0xFF; /* B */
-            keyrox_packet_t cfg_pkt;
-            keyrox_packet_init(&cfg_pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode_val, mode_params, 9);
-            keyrox_send_packet(dev, &cfg_pkt);
-            usleep(15000);
-        }
-    }
-
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_MODE, 0, 0, &mode_val, 1);
     return keyrox_send_packet(dev, &pkt);
@@ -207,46 +190,18 @@ int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level) {
     static const uint8_t s_bright_map[5] = { 0, 32, 64, 96, 127 };
     uint8_t raw_val = s_bright_map[level];
 
-    /* 1. Send CMD_SPEED_BRIGHT (0x06) */
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &raw_val, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-
-    /* 2. Also update brightness in current mode's config table (CMD 0x05) */
-    uint8_t cur_mode = 0;
-    if (keyrox_read_packet(dev, KEYROX_CMD_MODE, 0, 0, &cur_mode, 1) == 0 && cur_mode < KEYROX_MODE_COUNT) {
-        uint8_t mode_params[9] = {0};
-        if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9) == 0) {
-            mode_params[0] = raw_val;
-            keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9);
-            keyrox_send_packet(dev, &pkt);
-        }
-    }
-
-    return rc;
+    return keyrox_send_packet(dev, &pkt);
 }
 
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed) {
     if (!dev) return -1;
     if (speed > 4) speed = 4;
 
-    /* 1. Send CMD_SPEED_BRIGHT (0x06, subcmd 1) */
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &speed, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-
-    /* 2. Also update speed in current mode's config table (CMD 0x05) */
-    uint8_t cur_mode = 0;
-    if (keyrox_read_packet(dev, KEYROX_CMD_MODE, 0, 0, &cur_mode, 1) == 0 && cur_mode < KEYROX_MODE_COUNT) {
-        uint8_t mode_params[9] = {0};
-        if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9) == 0) {
-            mode_params[2] = (mode_params[2] & ~0x07) | (speed & 0x07);
-            keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)cur_mode, mode_params, 9);
-            keyrox_send_packet(dev, &pkt);
-        }
-    }
-
-    return rc;
+    return keyrox_send_packet(dev, &pkt);
 }
 
 int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile) {
@@ -343,30 +298,25 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
     }
 
     /* 3. Read Mode Parameters Table (9 bytes) for active mode to get real brightness & speed */
-    uint8_t mode_params[9] = {0};
-    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode_val, mode_params, 9) == 0) {
-        uint8_t raw_bright = mode_params[0];
-        if (out_bright) {
-            if (raw_bright == 0) *out_bright = 0;
-            else if (raw_bright < 48) *out_bright = 1;
-            else if (raw_bright < 80) *out_bright = 2;
-            else if (raw_bright < 112) *out_bright = 3;
-            else *out_bright = 4;
-        }
-        if (out_speed) {
-            uint8_t spd = mode_params[2] & 0x07;
-            *out_speed = spd > 4 ? 4 : spd;
+    if (mode_val < KEYROX_MODE_OFF) {
+        uint8_t mode_params[9] = {0};
+        if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode_val, mode_params, 9) == 0) {
+            uint8_t raw_bright = mode_params[0];
+            if (out_bright) {
+                if (raw_bright == 0) *out_bright = 0;
+                else if (raw_bright < 48) *out_bright = 1;
+                else if (raw_bright < 80) *out_bright = 2;
+                else if (raw_bright < 112) *out_bright = 3;
+                else *out_bright = 4;
+            }
+            if (out_speed) {
+                uint8_t spd = mode_params[2] & 0x07;
+                *out_speed = spd > 4 ? 4 : spd;
+            }
         }
     } else {
-        /* Fallback: try reading discrete speed/brightness */
-        uint8_t bright_val = 0;
-        if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &bright_val, 1) == 0) {
-            if (out_bright) *out_bright = bright_val > 4 ? 4 : bright_val;
-        }
-        uint8_t speed_val = 0;
-        if (keyrox_read_packet(dev, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &speed_val, 1) == 0) {
-            if (out_speed) *out_speed = speed_val > 4 ? 4 : speed_val;
-        }
+        if (out_bright) *out_bright = 0;
+        if (out_speed) *out_speed = 0;
     }
 
     /* 4. Read Device Info (FW version) */
