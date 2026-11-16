@@ -197,7 +197,12 @@ int keyrox_set_mode(keyrox_device_t *dev, keyrox_mode_t mode, keyrox_direction_t
 
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_MODE, 0, 0, &mode_val, 1);
-    return keyrox_send_packet(dev, &pkt);
+    int rc = keyrox_send_packet(dev, &pkt);
+    if (rc == 0) {
+        usleep(30000);
+        keyrox_save_settings(dev);
+    }
+    return rc;
 }
 
 int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level) {
@@ -210,7 +215,12 @@ int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level) {
 
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &raw_val, 1);
-    return keyrox_send_packet(dev, &pkt);
+    int rc = keyrox_send_packet(dev, &pkt);
+    if (rc == 0) {
+        usleep(30000);
+        keyrox_save_settings(dev);
+    }
+    return rc;
 }
 
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed) {
@@ -219,7 +229,12 @@ int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed) {
 
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &speed, 1);
-    return keyrox_send_packet(dev, &pkt);
+    int rc = keyrox_send_packet(dev, &pkt);
+    if (rc == 0) {
+        usleep(30000);
+        keyrox_save_settings(dev);
+    }
+    return rc;
 }
 
 int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile) {
@@ -227,7 +242,12 @@ int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile) {
     if (profile > 4) profile = 4;
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_PROFILE, 0, 0, &profile, 1);
-    return keyrox_send_packet(dev, &pkt);
+    int rc = keyrox_send_packet(dev, &pkt);
+    if (rc == 0) {
+        usleep(30000);
+        keyrox_save_settings(dev);
+    }
+    return rc;
 }
 
 int keyrox_set_key_remap(keyrox_device_t *dev, uint8_t key_index, uint16_t target_code) {
@@ -387,10 +407,10 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
     }
     if (out_mode) *out_mode = (keyrox_mode_t)mode_val;
 
-    /* 2. Read Profile (1 byte, 0-based on wire 0..4, user-facing 1..5) */
+    /* 2. Read Profile (1 byte, 0-based on wire 0..4, consistent with GUI) */
     uint8_t profile_val = 0;
     if (keyrox_read_packet(dev, KEYROX_CMD_PROFILE, 0, 0, &profile_val, 1) == 0) {
-        if (out_profile) *out_profile = profile_val + 1;
+        if (out_profile) *out_profile = profile_val;
     }
 
     /* 3. Read Brightness & Speed from current mode parameters block (CMD_05, len 9)
