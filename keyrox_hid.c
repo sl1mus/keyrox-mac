@@ -121,6 +121,7 @@ int keyrox_send_packet(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
         fprintf(stderr, "[-] IOHIDDeviceSetReport error: 0x%08x\n", ret);
         return -1;
     }
+    usleep(30000); /* 30 ms delay for GK8911M MCU command pacing */
     return 0;
 }
 
@@ -249,11 +250,26 @@ int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, siz
     return keyrox_send_packet(dev, &pkt);
 }
 
-int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, uint8_t g, uint8_t b) {
+int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_r, uint8_t fg_g, uint8_t fg_b, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {
     if (!dev) return -1;
-    /* 9-byte mode parameters block: [brightness, flags, flags, R, G, B, bgR, bgG, bgB] */
-    uint8_t params[9] = { 0x7f, 0x40, 0x34, r, g, b, 0x00, 0x00, 0x00 };
-    uint32_t offset = (uint32_t)mode * 9;
+
+    /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB] */
+    uint8_t params[9] = { 0x7f, 0xff, 0x34, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b };
+    uint8_t cur_params[9];
+    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, 0, (uint32_t)mode, cur_params, 9) == 0) {
+        params[0] = cur_params[0]; /* Preserve brightness */
+        params[1] = cur_params[1]; /* Preserve flags */
+        params[2] = cur_params[2]; /* Preserve speed */
+    }
+
+    params[3] = fg_r;
+    params[4] = fg_g;
+    params[5] = fg_b;
+    params[6] = bg_r;
+    params[7] = bg_g;
+    params[8] = bg_b;
+
+    uint32_t offset = (uint32_t)mode;
     keyrox_packet_t pkt;
     keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, 0, offset, params, 9);
     int rc = keyrox_send_packet(dev, &pkt);
@@ -264,11 +280,22 @@ int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, u
     return rc;
 }
 
+int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, uint8_t g, uint8_t b) {
+    return keyrox_set_mode_colors(dev, mode, r, g, b, 0, 0, 0);
+}
+
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
     if (!dev) return -1;
 
-    /* 1. Set mode 0 (Const) color table in MCU EEPROM */
-    keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b);
+    /* Determine current mode if possible, fallback to mode 0 */
+    keyrox_mode_t cur_mode = KEYROX_MODE_CONST;
+    uint8_t b_val = 0, s_val = 0, p_val = 0;
+    if (keyrox_get_status(dev, &cur_mode, &b_val, &s_val, &p_val, NULL, 0) != 0) {
+        cur_mode = KEYROX_MODE_CONST;
+    }
+
+    /* 1. Update current mode color table in MCU EEPROM */
+    keyrox_set_mode_color(dev, cur_mode, r, g, b);
 
     /* 2. Also stream per-key matrix */
     keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];

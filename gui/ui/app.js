@@ -294,54 +294,46 @@
 
   function loadProfile(p) {
     state.currentProfile = p;
-    const prof = profiles[p] || defaultProfiles[p] || defaultProfiles[0];
-    
-    state.currentMode = prof.mode ?? 1;
-    state.currentDir = prof.dir ?? 0;
-    state.currentBrightness = prof.brightness ?? 4;
-    state.currentSpeed = prof.speed ?? 2;
-    state.fgColor = { ...(prof.fgColor || { r: 255, g: 0, b: 0 }) };
-    state.bgColor = { ...(prof.bgColor || { r: 0, g: 102, b: 255 }) };
-    state.matrixColor = { ...(prof.matrixColor || { r: 0, g: 255, b: 0 }) };
 
-    state.remaps.clear();
-    if (prof.remaps) {
-      Object.entries(prof.remaps).forEach(([k, v]) => state.remaps.set(parseInt(k, 10), v));
-    }
-
-    state.keyCustomColors.clear();
-    document.querySelectorAll('.keycap').forEach(el => el.style.backgroundColor = '');
-    if (prof.matrixColors) {
-      Object.entries(prof.matrixColors).forEach(([k, v]) => {
-        const idx = parseInt(k, 10);
-        state.keyCustomColors.set(idx, v);
-        const el = document.getElementById(`key-${idx}`);
-        if (el) el.style.backgroundColor = `rgb(${v.r}, ${v.g}, ${v.b})`;
-      });
-    }
-
-    // Update UI controls
-    if (modeSelect) modeSelect.value = state.currentMode.toString();
-    document.querySelectorAll('.dir-btn').forEach(btn => {
-      btn.classList.toggle('active', parseInt(btn.dataset.dir, 10) === state.currentDir);
+    // Update active profile button in UI
+    document.querySelectorAll('.profile-btn').forEach(btn => {
+      btn.classList.toggle('active', parseInt(btn.dataset.profile, 10) === p);
     });
-    if (sliderBrightness) sliderBrightness.value = state.currentBrightness;
-    if (valBrightness) valBrightness.textContent = `${state.currentBrightness} / 4`;
-    if (sliderSpeed) sliderSpeed.value = state.currentSpeed;
-    if (valSpeed) valSpeed.textContent = `${state.currentSpeed} / 4`;
 
-    updatePaletteUI();
-    updateMatrixPaletteUI();
-    updateRemapList();
-
-    // Send hardware commands
+    // 1. Send single profile switch command to hardware
     sendToNative({ action: 'setProfile', profile: p });
-    sendToNative({ action: 'setMode', mode: state.currentMode, dir: state.currentDir });
-    sendToNative({ action: 'setBrightness', value: state.currentBrightness });
-    sendToNative({ action: 'setSpeed', value: state.currentSpeed });
-    sendToNative({ action: 'setColor', r: state.fgColor.r, g: state.fgColor.g, b: state.fgColor.b });
 
-    showToast(`Загружен профиль P${p + 1}`);
+    // 2. Query hardware status after MCU completes EEPROM profile switch (150ms)
+    setTimeout(() => {
+      sendToNative({ action: 'getStatus' });
+    }, 150);
+
+    // 3. Restore any profile saved custom colors/remaps from local profiles store
+    const prof = profiles[p];
+    if (prof) {
+      if (prof.fgColor) state.fgColor = { ...prof.fgColor };
+      if (prof.bgColor) state.bgColor = { ...prof.bgColor };
+      if (prof.matrixColor) state.matrixColor = { ...prof.matrixColor };
+      state.remaps.clear();
+      if (prof.remaps) {
+        Object.entries(prof.remaps).forEach(([k, v]) => state.remaps.set(parseInt(k, 10), v));
+      }
+      state.keyCustomColors.clear();
+      document.querySelectorAll('.keycap').forEach(el => el.style.backgroundColor = '');
+      if (prof.matrixColors) {
+        Object.entries(prof.matrixColors).forEach(([k, v]) => {
+          const idx = parseInt(k, 10);
+          state.keyCustomColors.set(idx, v);
+          const el = document.getElementById(`key-${idx}`);
+          if (el) el.style.backgroundColor = `rgb(${v.r}, ${v.g}, ${v.b})`;
+        });
+      }
+      updatePaletteUI();
+      updateMatrixPaletteUI();
+      updateRemapList();
+    }
+
+    showToast(`Переключено на профиль P${p + 1}`);
   }
 
   // Profile button clicks
@@ -468,9 +460,26 @@
     updatePaletteUI();
   }
 
+  function applyCurrentColor() {
+    sendToNative({
+      action: 'setColor',
+      mode: state.currentMode,
+      r: state.fgColor.r,
+      g: state.fgColor.g,
+      b: state.fgColor.b,
+      bg_r: state.bgColor.r,
+      bg_g: state.bgColor.g,
+      bg_b: state.bgColor.b
+    });
+  }
+
   sliderR?.addEventListener('input', onRgbSliderChange);
   sliderG?.addEventListener('input', onRgbSliderChange);
   sliderB?.addEventListener('input', onRgbSliderChange);
+
+  sliderR?.addEventListener('change', applyCurrentColor);
+  sliderG?.addEventListener('change', applyCurrentColor);
+  sliderB?.addEventListener('change', applyCurrentColor);
 
   document.querySelectorAll('#tab-panel-led .palette-swatches .swatch').forEach(sw => {
     sw.addEventListener('click', () => {
@@ -481,12 +490,13 @@
         state.bgColor = rgb;
       }
       updatePaletteUI();
+      applyCurrentColor();
+      showToast(`Цвет применен к режиму`);
     });
   });
 
   document.getElementById('btn-apply-all-color')?.addEventListener('click', () => {
-    const col = state.activeLayer === 'fg' ? state.fgColor : state.bgColor;
-    sendToNative({ action: 'setColor', r: col.r, g: col.g, b: col.b });
+    applyCurrentColor();
     showToast('Цвет применен ко всей клавиатуре');
   });
 

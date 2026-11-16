@@ -2,6 +2,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <sys/stat.h>
 #include "keyrox_reset.h"
+#include "keyrox_keys.h"
 
 @interface TitleBarDragView : NSView
 @end
@@ -564,7 +565,15 @@
             int r = [dict[@"r"] intValue];
             int g = [dict[@"g"] intValue];
             int b = [dict[@"b"] intValue];
-            keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+            int mode = dict[@"mode"] ? [dict[@"mode"] intValue] : -1;
+            int bg_r = dict[@"bg_r"] ? [dict[@"bg_r"] intValue] : 0;
+            int bg_g = dict[@"bg_g"] ? [dict[@"bg_g"] intValue] : 0;
+            int bg_b = dict[@"bg_b"] ? [dict[@"bg_b"] intValue] : 0;
+            if (mode >= 0) {
+                keyrox_set_mode_colors(dev, (keyrox_mode_t)mode, (uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)bg_r, (uint8_t)bg_g, (uint8_t)bg_b);
+            } else {
+                keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+            }
         }
         else if ([action isEqualToString:@"setKeyColor"]) {
             int keyIdx = [dict[@"keyIndex"] intValue];
@@ -578,9 +587,20 @@
             int r = [dict[@"r"] intValue];
             int g = [dict[@"g"] intValue];
             int b = [dict[@"b"] intValue];
-            for (NSNumber *num in keys) {
-                keyrox_set_key_color(dev, (uint8_t)[num intValue], (uint8_t)r, (uint8_t)g, (uint8_t)b);
-                usleep(1500);
+            if (keys.count >= KEYROX_TKL_KEY_COUNT) {
+                /* Optimization: stream all keys in 1 fast packet */
+                keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
+                for (size_t i = 0; i < KEYROX_TKL_KEY_COUNT; ++i) {
+                    colors[i].r = (uint8_t)r;
+                    colors[i].g = (uint8_t)g;
+                    colors[i].b = (uint8_t)b;
+                    colors[i].brightness = 0xFF;
+                }
+                keyrox_stream_matrix(dev, colors, KEYROX_TKL_KEY_COUNT);
+            } else {
+                for (NSNumber *num in keys) {
+                    keyrox_set_key_color(dev, (uint8_t)[num intValue], (uint8_t)r, (uint8_t)g, (uint8_t)b);
+                }
             }
         }
         else if ([action isEqualToString:@"setKeyRemap"]) {
