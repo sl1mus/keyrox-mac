@@ -2,8 +2,9 @@
 > **Нативная панель управления и CLI-утилита для клавиатуры Red Square Keyrox TKL под macOS (Apple Silicon & Intel)**
 
 [![macOS](https://img.shields.io/badge/macOS-12.0%2B-blue?logo=apple)](https://apple.com)
+[![Latest Release](https://img.shields.io/badge/Release-v1.0.3-brightgreen?logo=github)](https://github.com/sl1mus/keyrox-mac/releases/tag/v1.0.3)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(ARM64%20%2B%20x86__64)-purple)]()
-[![App Size](https://img.shields.io/badge/Size-2.9%20MB-success)]()
+[![App Size](https://img.shields.io/badge/Size-1.7%20MB%20(DMG)-success)]()
 [![Electron Free](https://img.shields.io/badge/Electron-Free%20(Pure%20Cocoa%20%2B%20IOKit)-orange)]()
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -36,12 +37,16 @@
 
 ## 📦 Быстрый старт и установка
 
+### 📥 1-Click Install (Готовый DMG)
+Скачайте готовый DMG-образ последней версии:
+- 🍏 **[Keyrox-macOS.dmg (v1.0.3 Universal)](https://github.com/sl1mus/keyrox-mac/releases/download/v1.0.3/Keyrox-macOS.dmg)** (1.7 MB, Apple Silicon M1/M2/M3/M4 + Intel x86_64)
+
 ### 1. Требования
 - macOS 12 Monterey, macOS 13 Ventura, macOS 14 Sonoma, macOS 15 Sequoia (или новее).
 - Архитектура: Apple Silicon (M1/M2/M3/M4) или Intel x86_64.
 - Клавиатура: Red Square Keyrox TKL (VID: `1a2c`, PID: `2511`).
 
-### 2. Сборка и установка графического приложения
+### 2. Сборка из исходников и установка графического приложения
 ```bash
 git clone https://github.com/sl1mus/keyrox-mac.git
 cd keyrox-mac
