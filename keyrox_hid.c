@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <CoreFoundation/CoreFoundation.h>
 
 static CFMutableDictionaryRef create_matching_dict(uint32_t vid, uint32_t pid, uint32_t usage_page, uint32_t usage) {
@@ -130,7 +133,26 @@ void keyrox_close(keyrox_device_t *dev) {
     free(dev);
 }
 
-int keyrox_send_packet(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
+/* Keep SetReport/GetReport pairs indivisible across GUI, CLI and watchdog. */
+static int lock_transport(void) {
+    char path[128];
+    snprintf(path, sizeof(path), "/tmp/keyrox-hid-%u.lock", (unsigned)getuid());
+    int fd = open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) return -1;
+    struct stat info;
+    if (fstat(fd, &info) != 0 || info.st_uid != getuid() || !S_ISREG(info.st_mode)) {
+        close(fd);
+        return -1;
+    }
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        if (flock(fd, LOCK_EX | LOCK_NB) == 0) return fd;
+        usleep(10000);
+    }
+    close(fd);
+    return -1;
+}
+
+static int send_packet_unlocked(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
     if (!dev || !dev->device || !pkt) return -1;
     IOReturn ret = IOHIDDeviceSetReport(dev->device,
                                         kIOHIDReportTypeFeature,
@@ -145,12 +167,20 @@ int keyrox_send_packet(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
     return 0;
 }
 
-int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32_t offset, void *out_buf, uint16_t req_len) {
+int keyrox_send_packet(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
+    int fd = lock_transport();
+    if (fd < 0) return -1;
+    int result = send_packet_unlocked(dev, pkt);
+    close(fd);
+    return result;
+}
+
+static int read_packet_unlocked(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32_t offset, void *out_buf, uint16_t req_len) {
     if (!dev || !dev->device || req_len > KEYROX_PAYLOAD_MAX) return -1;
 
     keyrox_packet_t req;
     keyrox_packet_init(&req, cmd | KEYROX_CMD_READ_FLAG, subcmd, offset, NULL, req_len);
-    if (keyrox_send_packet(dev, &req) != 0) {
+    if (send_packet_unlocked(dev, &req) != 0) {
         return -1;
     }
 
@@ -188,6 +218,14 @@ int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32
     }
 
     return 0;
+}
+
+int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32_t offset, void *out_buf, uint16_t req_len) {
+    int fd = lock_transport();
+    if (fd < 0) return -1;
+    int result = read_packet_unlocked(dev, cmd, subcmd, offset, out_buf, req_len);
+    close(fd);
+    return result;
 }
 
 static int read_effect(keyrox_device_t *dev, uint8_t *effect) {
@@ -308,12 +346,129 @@ int keyrox_save_settings(keyrox_device_t *dev) {
     return keyrox_send_packet(dev, &pkt);
 }
 
+static const CFStringRef backlight_domain = CFSTR("io.github.sl1mus.keyrox.backlight");
+
+static int save_backlight_data(CFStringRef key, CFDataRef data) {
+    CFPreferencesSetAppValue(key, data, backlight_domain);
+    return CFPreferencesAppSynchronize(backlight_domain) ? 0 : -1;
+}
+
+static CFDataRef copy_backlight_data(CFStringRef key) {
+    CFPreferencesAppSynchronize(backlight_domain);
+    CFPropertyListRef value = CFPreferencesCopyAppValue(key, backlight_domain);
+    if (value && CFGetTypeID(value) != CFDataGetTypeID()) {
+        CFRelease(value);
+        return NULL;
+    }
+    return (CFDataRef)value;
+}
+
+/* Called under the transport lock so the saved state matches the dimmed frame. */
+static int sync_display_brightness_unlocked(keyrox_device_t *dev, bool sleeping) {
+    const CFStringRef state_key = CFSTR("DisplaySleepState");
+    uint8_t effect;
+    if (read_packet_unlocked(dev, KEYROX_CMD_EFFECT, 0, 0, &effect, 1) != 0 ||
+        keyrox_mode_from_wire(effect) < 0) return -1;
+
+    CFDataRef state = copy_backlight_data(state_key);
+    if (sleeping && state) {
+        CFRelease(state);
+        return 0;
+    }
+    if (!sleeping && !state) return 0;
+
+    bool custom = keyrox_mode_from_wire(effect) == KEYROX_MODE_CUSTOM;
+    size_t payload_size = custom ? sizeof(keyrox_packet_t) : MODE_PARAM_SIZE;
+    uint8_t saved[1 + sizeof(keyrox_packet_t)] = {effect};
+    keyrox_packet_t packet;
+
+    if (sleeping) {
+        if (custom) {
+            CFDataRef matrix = copy_backlight_data(CFSTR("LastMatrixFrame"));
+            if (!matrix || CFDataGetLength(matrix) != sizeof(packet)) {
+                if (matrix) CFRelease(matrix);
+                return -1;
+            }
+            memcpy(&packet, CFDataGetBytePtr(matrix), sizeof(packet));
+            CFRelease(matrix);
+            if (packet.cmd != KEYROX_CMD_REMAP || packet.len != KEYROX_MATRIX_FRAME_LENGTH) return -1;
+            memcpy(saved + 1, &packet, sizeof(packet));
+            for (size_t i = 3; i < KEYROX_MATRIX_FRAME_LENGTH; i += 4) {
+                if (packet.data[i] > 32) packet.data[i] = 32;
+            }
+        } else {
+            uint8_t params[MODE_PARAM_SIZE];
+            if (read_packet_unlocked(dev, KEYROX_CMD_CUSTOM_LED, effect, 0, params, sizeof(params)) != 0) return -1;
+            if (params[MODE_BRIGHTNESS] <= 32) return 0;
+            memcpy(saved + 1, params, sizeof(params));
+            params[MODE_BRIGHTNESS] = 32;
+            keyrox_packet_init(&packet, KEYROX_CMD_CUSTOM_LED, effect, 0, params, sizeof(params));
+        }
+        state = CFDataCreate(kCFAllocatorDefault, saved, 1 + payload_size);
+        if (!state) return -1;
+        int persisted = save_backlight_data(state_key, state);
+        CFRelease(state);
+        if (persisted != 0) return -1;
+    } else {
+        CFIndex length = CFDataGetLength(state);
+        if (length != (CFIndex)(1 + payload_size) || CFDataGetBytePtr(state)[0] != effect) {
+            CFRelease(state);
+            return save_backlight_data(state_key, NULL);
+        }
+        memcpy(saved, CFDataGetBytePtr(state), (size_t)length);
+        CFRelease(state);
+        if (custom) {
+            CFDataRef current = copy_backlight_data(CFSTR("LastMatrixFrame"));
+            bool changed = !current || CFDataGetLength(current) != sizeof(packet) ||
+                memcmp(CFDataGetBytePtr(current), saved + 1, sizeof(packet)) != 0;
+            if (current) CFRelease(current);
+            if (changed) return save_backlight_data(state_key, NULL);
+            memcpy(&packet, saved + 1, sizeof(packet));
+        } else {
+            uint8_t params[MODE_PARAM_SIZE];
+            if (read_packet_unlocked(dev, KEYROX_CMD_CUSTOM_LED, effect, 0, params, sizeof(params)) != 0) return -1;
+            /* Keep changes made to the effect while the screen was asleep. */
+            if (params[MODE_BRIGHTNESS] != 32) return save_backlight_data(state_key, NULL);
+            params[MODE_BRIGHTNESS] = saved[1 + MODE_BRIGHTNESS];
+            keyrox_packet_init(&packet, KEYROX_CMD_CUSTOM_LED, effect, 0, params, sizeof(params));
+        }
+    }
+
+    if (send_packet_unlocked(dev, &packet) != 0) return -1;
+    if (!custom) {
+        uint8_t actual[MODE_PARAM_SIZE];
+        if (read_packet_unlocked(dev, KEYROX_CMD_CUSTOM_LED, effect, 0, actual, sizeof(actual)) != 0 ||
+            memcmp(actual, packet.data, sizeof(actual)) != 0) return -1;
+    }
+    return sleeping ? 0 : save_backlight_data(state_key, NULL);
+}
+
+int keyrox_sync_display_brightness(keyrox_device_t *dev, bool sleeping) {
+    if (!dev || !dev->device) return -1;
+    int fd = lock_transport();
+    if (fd < 0) return -1;
+    int result = sync_display_brightness_unlocked(dev, sleeping);
+    close(fd);
+    return result;
+}
+
 int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, size_t count) {
     if (!dev || !colors || count != KEYROX_TKL_KEY_COUNT) return -1;
     if (select_effect(dev, (uint8_t)keyrox_mode_to_wire(KEYROX_MODE_CUSTOM)) != 0) return -1;
     keyrox_packet_t pkt;
     keyrox_matrix_packet_init(&pkt, colors, count);
-    return keyrox_send_packet(dev, &pkt);
+    int fd = lock_transport();
+    if (fd < 0) return -1;
+    int result = send_packet_unlocked(dev, &pkt);
+    if (result == 0) {
+        CFDataRef frame = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)&pkt, sizeof(pkt));
+        if (frame) {
+            result = save_backlight_data(CFSTR("LastMatrixFrame"), frame);
+            CFRelease(frame);
+        } else result = -1;
+    }
+    close(fd);
+    return result;
 }
 
 int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_r, uint8_t fg_g, uint8_t fg_b, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {

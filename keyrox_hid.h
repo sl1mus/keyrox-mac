@@ -20,6 +20,8 @@ int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32
 /* High-level control commands */
 int keyrox_set_mode(keyrox_device_t *dev, keyrox_mode_t mode, keyrox_direction_t dir);
 int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level);
+/* Dim to the lowest nonzero level, or restore the saved brightness. */
+int keyrox_sync_display_brightness(keyrox_device_t *dev, bool sleeping);
 int keyrox_set_direction(keyrox_device_t *dev, keyrox_direction_t dir);
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed);
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b);

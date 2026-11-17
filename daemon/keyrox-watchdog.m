@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <IOKit/IOKitLib.h>
+#import <IOKit/IOMessage.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>
 #import <IOUSBHost/IOUSBHost.h>
 
@@ -8,6 +9,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <mach-o/dyld.h>
+#include <limits.h>
 #include "../keyrox_reset.h"
 #include "../keyrox_hid.h"
 #include "../keyrox_proto.h"
@@ -16,8 +19,7 @@ static IOPMAssertionID gSystemAssertionID = kIOPMNullAssertionID;
 static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
 static BOOL gDisplayIsSleeping = NO;
-static uint8_t gSavedBrightness = 4;
-static BOOL gBacklightTurnedOffForSleep = NO;
+static BOOL gBrightnessSynchronized = NO;
 static io_object_t gDisplayWranglerNotifier = 0;
 
 static void logMessage(const char *format, ...) {
@@ -60,33 +62,6 @@ static void releasePowerAssertions(void) {
     }
 }
 
-static void turnOffBacklightForSleep(void) {
-    if (gBacklightTurnedOffForSleep) return;
-    keyrox_device_t *dev = keyrox_open();
-    if (!dev) return;
-
-    uint8_t brightness;
-    if (keyrox_get_status(dev, NULL, &brightness, NULL, NULL, NULL, 0) == 0 &&
-        brightness > 0 && keyrox_set_brightness(dev, 0) == 0) {
-        gSavedBrightness = brightness;
-        gBacklightTurnedOffForSleep = YES;
-        logMessage("Backlight dimmed for sleep (saved brightness: %u/4)", brightness);
-    }
-    keyrox_close(dev);
-}
-
-static void restoreBacklightAfterWake(void) {
-    if (!gBacklightTurnedOffForSleep) return;
-    keyrox_device_t *dev = keyrox_open();
-    if (!dev) return;
-
-    if (keyrox_set_brightness(dev, gSavedBrightness) == 0) {
-        gBacklightTurnedOffForSleep = NO;
-        logMessage("Backlight brightness restored to %u/4", gSavedBrightness);
-    }
-    keyrox_close(dev);
-}
-
 static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument);
 
 static int reviveKeyboard(const char *reason) {
@@ -100,44 +75,91 @@ static int reviveKeyboard(const char *reason) {
     return result;
 }
 
+/* Run USB calls in a child so a stuck driver cannot stop the watchdog timer. */
+static int runWorker(NSString *argument, NSTimeInterval timeout) {
+    char executable[PATH_MAX];
+    uint32_t size = sizeof(executable);
+    if (_NSGetExecutablePath(executable, &size) != 0) return -1;
+    NSTask *task = [NSTask new];
+    task.executableURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:executable]];
+    task.arguments = @[argument];
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) {
+        logMessage("Worker launch failed: %s", error.localizedDescription.UTF8String);
+        return -1;
+    }
+    NSTimeInterval deadline = NSProcessInfo.processInfo.systemUptime + timeout;
+    while (task.running && NSProcessInfo.processInfo.systemUptime < deadline) usleep(20000);
+    if (task.running) {
+        kill(task.processIdentifier, SIGKILL);
+        logMessage("Worker %s timed out after %.0f seconds", argument.UTF8String, timeout);
+        return -1;
+    }
+    return task.terminationStatus;
+}
+
+static void syncDisplayBrightness(void) {
+    if (gBrightnessSynchronized) return;
+    NSString *argument = gDisplayIsSleeping ? @"--dim" : @"--restore-brightness";
+    if (runWorker(argument, 3) == 0) {
+        gBrightnessSynchronized = YES;
+        logMessage("%s", gDisplayIsSleeping ? "Display asleep: backlight dimmed to minimum" :
+                   "Display awake: previous backlight brightness restored");
+    }
+}
+
+static void displaySleepChanged(BOOL sleeping) {
+    if (gDisplayIsSleeping != sleeping) {
+        gDisplayIsSleeping = sleeping;
+        gBrightnessSynchronized = NO;
+    }
+    syncDisplayBrightness();
+}
+
 static void checkKeyboardHealth(void) {
     static unsigned consecutiveFailures = 0;
-    static BOOL recoveryAttempted = NO;
-    keyrox_device_t *dev = keyrox_open();
-    int status = keyrox_get_status(dev, NULL, NULL, NULL, NULL, NULL, 0);
-    keyrox_close(dev);
+    static NSTimeInterval lastRecovery = -30;
+    static NSTimeInterval lastHeartbeat = -60;
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
 
+    if (!keyrox_usb_is_present()) {
+        if (gKeyboardConnected) logMessage("Keyboard disappeared from USB; waiting for reconnection");
+        gKeyboardConnected = NO;
+        consecutiveFailures = 0;
+        return;
+    }
+    int status = runWorker(@"--probe", 3);
     if (status != 0) {
         gKeyboardConnected = NO;
-        if (consecutiveFailures < 3) consecutiveFailures++;
-        if (consecutiveFailures >= 3 && !recoveryAttempted && keyrox_usb_is_present()) {
-            recoveryAttempted = YES;
-            if (reviveKeyboard("consecutive HID failures") == 0) {
+        consecutiveFailures++;
+        logMessage("HID heartbeat failed (%u consecutive failures)", consecutiveFailures);
+        if (consecutiveFailures >= 3 && now - lastRecovery >= 30) {
+            lastRecovery = now;
+            int recovered = runWorker(@"--revive", 8);
+            logMessage("Automatic recovery finished (result %d)", recovered);
+            if (recovered == 0) {
                 consecutiveFailures = 0;
-                recoveryAttempted = NO;
                 gKeyboardConnected = YES;
-                if (!gDisplayIsSleeping) restoreBacklightAfterWake();
+                gBrightnessSynchronized = NO;
             }
         }
         return;
     }
-
     consecutiveFailures = 0;
-    recoveryAttempted = NO;
-    if (!gKeyboardConnected) logMessage("Keyrox HID is responding");
+    if (!gKeyboardConnected || now - lastHeartbeat >= 60) {
+        logMessage("HID heartbeat OK; automatic recovery armed");
+        lastHeartbeat = now;
+    }
     gKeyboardConnected = YES;
-    if (!gDisplayIsSleeping) restoreBacklightAfterWake();
+    syncDisplayBrightness();
 }
 
 static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument) {
     (void)refcon; (void)service; (void)messageArgument;
-    if (messageType == 0xe0000280 /* kIOMessageDeviceWillPowerOff */ ||
-        messageType == 0xe0000270 /* kIOMessageCanDevicePowerOff */) {
-        gDisplayIsSleeping = YES;
-        turnOffBacklightForSleep();
-    } else if (messageType == 0xe0000250 /* kIOMessageDeviceHasPoweredOn */) {
-        gDisplayIsSleeping = NO;
-        restoreBacklightAfterWake();
+    if (messageType == kIOMessageDeviceWillPowerOff) {
+        displaySleepChanged(YES);
+    } else if (messageType == kIOMessageDeviceHasPoweredOn) {
+        displaySleepChanged(NO);
         checkKeyboardHealth();
     }
 }
@@ -151,6 +173,19 @@ static void signalHandler(int sig) {
 
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
+        if (argc > 1 && (strcmp(argv[1], "--dim") == 0 ||
+                         strcmp(argv[1], "--restore-brightness") == 0)) {
+            keyrox_device_t *dev = keyrox_open();
+            int result = keyrox_sync_display_brightness(dev, strcmp(argv[1], "--dim") == 0);
+            keyrox_close(dev);
+            return result == 0 ? 0 : 1;
+        }
+        if (argc > 1 && strcmp(argv[1], "--probe") == 0) {
+            keyrox_device_t *dev = keyrox_open();
+            int result = keyrox_get_status(dev, NULL, NULL, NULL, NULL, NULL, 0);
+            keyrox_close(dev);
+            return result == 0 ? 0 : 1;
+        }
         if (argc > 1 && (strcmp(argv[1], "--revive") == 0 || strcmp(argv[1], "-r") == 0)) {
             return reviveKeyboard("CLI manual trigger") == 0 ? 0 : 1;
         }
@@ -159,9 +194,9 @@ int main(int argc, const char *argv[]) {
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 
-        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.3 (Smart Backlight Sleep Sync + 10s Heartbeat)");
+        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.0.5 (bounded heartbeat and automatic USB recovery)");
         logMessage("Target: VID 0x1A2C, PID 0x2511 / 0x1511 (Red Square Keyrox TKL)");
-        logMessage("Mode: Display Sleep allowed (Backlight dims to 0 on sleep, restores on wake)");
+        logMessage("Heartbeat every 5 seconds; recovery after 3 failures; retry cooldown 30 seconds");
 
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
@@ -176,6 +211,16 @@ int main(int argc, const char *argv[]) {
 
         io_service_t wrangler = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IODisplayWrangler"));
         if (wrangler) {
+            CFTypeRef power = IORegistryEntryCreateCFProperty(wrangler, CFSTR("IOPowerManagement"), kCFAllocatorDefault, 0);
+            if (power && CFGetTypeID(power) == CFDictionaryGetTypeID()) {
+                CFNumberRef value = CFDictionaryGetValue((CFDictionaryRef)power, CFSTR("CurrentPowerState"));
+                int state = 4;
+                if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
+                    CFNumberGetValue(value, kCFNumberIntType, &state);
+                    gDisplayIsSleeping = state < 4;
+                }
+            }
+            if (power) CFRelease(power);
             if (notifyPort && IOServiceAddInterestNotification(notifyPort, wrangler, kIOGeneralInterest,
                                                               DisplayWranglerCallback, NULL, &gDisplayWranglerNotifier) == kIOReturnSuccess) {
                 logMessage("IODisplayWrangler kernel power listener registered");
@@ -191,8 +236,7 @@ int main(int argc, const char *argv[]) {
                                queue:[NSOperationQueue mainQueue]
                           usingBlock:^(NSNotification *note) {
             (void)note;
-            gDisplayIsSleeping = YES;
-            turnOffBacklightForSleep();
+            displaySleepChanged(YES);
         }];
 
         [wsCenter addObserverForName:NSWorkspaceScreensDidWakeNotification
@@ -200,8 +244,7 @@ int main(int argc, const char *argv[]) {
                                queue:[NSOperationQueue mainQueue]
                           usingBlock:^(NSNotification *note) {
             (void)note;
-            gDisplayIsSleeping = NO;
-            restoreBacklightAfterWake();
+            displaySleepChanged(NO);
             createPowerAssertions();
             checkKeyboardHealth();
         }];
@@ -219,12 +262,12 @@ int main(int argc, const char *argv[]) {
         // Initial health check
         checkKeyboardHealth();
 
-        // 10-second periodic health check & USB heartbeat
+        // Five-second health check and retry of pending brightness synchronization
         gTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         dispatch_source_set_timer(
             gTimer,
-            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)),
-            (uint64_t)(10.0 * NSEC_PER_SEC),
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+            (uint64_t)(5.0 * NSEC_PER_SEC),
             1 * NSEC_PER_SEC
         );
         dispatch_source_set_event_handler(gTimer, ^{

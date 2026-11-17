@@ -2,9 +2,9 @@
 > **Нативная панель управления и CLI-утилита для клавиатуры Red Square Keyrox TKL под macOS (Apple Silicon & Intel)**
 
 [![macOS](https://img.shields.io/badge/macOS-12.0%2B-blue?logo=apple)](https://apple.com)
-[![Latest Release](https://img.shields.io/badge/Release-v1.0.3-brightgreen?logo=github)](https://github.com/sl1mus/keyrox-mac/releases/tag/v1.0.3)
+[![Latest Release](https://img.shields.io/badge/Release-v1.0.5-brightgreen?logo=github)](https://github.com/sl1mus/keyrox-mac/releases/tag/v1.0.5)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(ARM64%20%2B%20x86__64)-purple)]()
-[![App Size](https://img.shields.io/badge/Size-1.7%20MB%20(DMG)-success)]()
+[![App Size](https://img.shields.io/badge/Size-1.8%20MB%20(DMG)-success)]()
 [![Electron Free](https://img.shields.io/badge/Electron-Free%20(Pure%20Cocoa%20%2B%20IOKit)-orange)]()
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
@@ -33,7 +33,7 @@
 - 💾 **Управление профилями (P1 — P4):** Мгновенное переключение профилей, запись во внутреннюю энергонезависимую Flash-память контроллера, дублирование на диск (`~/Library/Application Support/Keyrox/profiles.json`) и уведомления в виде Toast.
 - ⚡ **Аппаратный перезапуск USB (Hardware Bus Reset):** Команда `keyrox-ctl revive` (и кнопка в GUI) отправляет низкоуровневый импульс сброса шины USB (SE0 bus reset) через `IOUSBHostDevice` в ядро macOS для перезагрузки зависшего микроконтроллера без физического переподключения (при активном USB-линке).
 - 🪟 **Нативный macOS UX:** Компактный размер (~2.8 МБ), нулевое потребление памяти (без Electron/Node.js), поддержка свободного перетаскивания окна за шапку и плавная анимация.
-- 🛡️ **Синхронизация подсветки и защита от засыпания (`keyrox-watchdog`):** Фоновый демон LaunchAgent удерживает `PreventUserIdleSystemSleep` (не препятствуя штатному сну экрана). При засыпании дисплея демон на уровне ядра (`IODisplayWrangler`) и Cocoa моментально гасит RGB-подсветку в 0, снижая ток потребления с 500 мА до ~5 мА и предотвращая Brownout-сброс контроллера GK8911M на шине xHCI. При пробуждении экрана подсветка мгновенно восстанавливается до прежнего уровня, а 10-секундный USB Heartbeat непрерывно поддерживает линк.
+- 🛡️ **Фоновая защита и яркость при сне экрана (keyrox-watchdog):** служба проверяет ответ клавиатуры каждые 5 секунд. После трёх последовательных ошибок выполняет USB-восстановление с повторными попытками через 30 секунд. Запросы к драйверу имеют ограничение времени, приложение, CLI и служба координируют доступ к HID. При засыпании экрана яркость снижается до минимального ненулевого уровня, при пробуждении восстанавливается прежняя. Для Custom Matrix сохраняются цвета и поклавишная яркость последнего кадра, отправленного этой версией приложения. Служба удерживает ограничение автоматического сна системы, экран может засыпать.
 
 ---
 
@@ -41,7 +41,7 @@
 
 ### 📥 1-Click Install (Готовый DMG)
 Скачайте готовый DMG-образ последней версии:
-- 🍏 **[Keyrox-macOS.dmg (v1.0.3 Universal)](https://github.com/sl1mus/keyrox-mac/releases/download/v1.0.3/Keyrox-macOS.dmg)** (1.7 MB, Apple Silicon M1/M2/M3/M4 + Intel x86_64)
+- 🍏 **[Keyrox-macOS.dmg (v1.0.5 Universal)](https://github.com/sl1mus/keyrox-mac/releases/download/v1.0.5/Keyrox-macOS.dmg)** (1.8 MB, Apple Silicon M1/M2/M3/M4 + Intel x86_64)
 
 ### 1. Требования
 - macOS 12 Monterey, macOS 13 Ventura, macOS 14 Sonoma, macOS 15 Sequoia (или новее).
@@ -59,6 +59,14 @@ make -C gui install
 # Запуск приложения
 open /Applications/Keyrox.app
 ```
+
+### Фоновая защита и приглушение подсветки
+
+Откройте **Settings** и включите фоновую автозащиту. Служба запускается при входе в macOS и работает после закрытия окна Keyrox. После обновления приложения отключите и повторно включите фоновую автозащиту, чтобы обновить её отдельную установленную копию.
+
+Обычные эффекты приглушаются до уровня **1 из 4** с восстановлением предыдущей яркости при пробуждении. Уже выключенная подсветка остаётся выключенной. Для приглушения Custom Matrix сначала примените поклавишные цвета в текущей версии приложения.
+
+Проверено на Keyrox TKL V2 (1a2c:2511) под macOS Sonoma. Реальный цикл сна экрана подтвердил яркость **4 → 1 → 4** и сохранение выбранного эффекта. Проверены автоматический перезапуск службы, обработка зависшего запроса и совместные запросы CLI со службой. Восстановление после повторного аппаратного зависания требует дальнейшей проверки на устройстве.
 
 ### 3. Сборка CLI-утилиты
 ```bash
