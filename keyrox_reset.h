@@ -1,6 +1,8 @@
 #ifndef KEYROX_RESET_H
 #define KEYROX_RESET_H
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,6 +19,10 @@ extern "C" {
  *  -3 if resetWithError returned failure
  */
 int keyrox_usb_bus_reset(void);
+bool keyrox_usb_is_present(void);
+
+/* Reset and wait for a valid HID response. Returns -4 if the controller stays unresponsive. */
+int keyrox_revive(void);
 
 #ifdef __cplusplus
 }

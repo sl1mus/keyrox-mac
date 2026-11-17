@@ -28,6 +28,7 @@
     dispatch_queue_t _hidQueue;
     NSTimer *_pollTimer;
     BOOL _lastConnected;
+    NSTimeInterval _lastWakeReset;
 }
 @end
 
@@ -337,7 +338,7 @@
                 @"modeName": [NSString stringWithUTF8String:keyrox_mode_to_string(mode)],
                 @"brightness": @(bright),
                 @"speed": @(speed),
-                @"profile": @(profile),
+                @"profile": profile == KEYROX_NO_PRESET ? [NSNull null] : @(profile),
                 @"fw": [NSString stringWithUTF8String:fw]
             };
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -406,14 +407,7 @@
         return;
     }
     if ([action isEqualToString:@"reviveDevice"]) {
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-            keyrox_usb_bus_reset();
-            usleep(600000);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self checkDeviceStatus];
-                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"⚡ Шина USB перезапущена, клавиатура реанимирована!"}];
-            });
-        });
+        [self reviveDeviceOnWake:NO];
         return;
     }
     if ([action isEqualToString:@"getWatchdogStatus"]) {
@@ -534,25 +528,29 @@
             return;
         }
 
+        int result = 0;
         if ([action isEqualToString:@"getStatus"]) {
             [self checkDeviceStatus];
         }
         else if ([action isEqualToString:@"setMode"]) {
             int modeVal = [dict[@"mode"] intValue];
             int dirVal = dict[@"dir"] ? [dict[@"dir"] intValue] : 0;
-            keyrox_set_mode(dev, (keyrox_mode_t)modeVal, (keyrox_direction_t)dirVal);
+            result = keyrox_set_mode(dev, (keyrox_mode_t)modeVal, (keyrox_direction_t)dirVal);
+        }
+        else if ([action isEqualToString:@"setDirection"]) {
+            result = keyrox_set_direction(dev, (keyrox_direction_t)[dict[@"dir"] intValue]);
         }
         else if ([action isEqualToString:@"setBrightness"]) {
             int val = [dict[@"value"] intValue];
-            keyrox_set_brightness(dev, (uint8_t)val);
+            result = keyrox_set_brightness(dev, (uint8_t)val);
         }
         else if ([action isEqualToString:@"setSpeed"]) {
             int val = [dict[@"value"] intValue];
-            keyrox_set_speed(dev, (uint8_t)val);
+            result = keyrox_set_speed(dev, (uint8_t)val);
         }
         else if ([action isEqualToString:@"setProfile"]) {
             int val = [dict[@"profile"] intValue];
-            keyrox_set_profile(dev, (uint8_t)val);
+            result = keyrox_set_profile(dev, (uint8_t)val);
         }
         else if ([action isEqualToString:@"setColor"]) {
             int r = [dict[@"r"] intValue];
@@ -563,27 +561,28 @@
             int bg_g = dict[@"bg_g"] ? [dict[@"bg_g"] intValue] : 0;
             int bg_b = dict[@"bg_b"] ? [dict[@"bg_b"] intValue] : 0;
             if (mode >= 0) {
-                keyrox_set_mode_colors(dev, (keyrox_mode_t)mode, (uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)bg_r, (uint8_t)bg_g, (uint8_t)bg_b);
+                result = keyrox_set_mode_colors(dev, (keyrox_mode_t)mode, (uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)bg_r, (uint8_t)bg_g, (uint8_t)bg_b);
             } else {
-                keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+                result = keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+            }
+            if (result == 0) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self sendJSEvent:@"onToastMessage" data:@{@"message": @"Цвет применён"}];
+                });
             }
         }
-        else if ([action isEqualToString:@"setKeyColor"]) {
-            int keyIdx = [dict[@"keyIndex"] intValue];
-            int r = [dict[@"r"] intValue];
-            int g = [dict[@"g"] intValue];
-            int b = [dict[@"b"] intValue];
-            keyrox_set_key_color(dev, (uint8_t)keyIdx, (uint8_t)r, (uint8_t)g, (uint8_t)b);
-        }
-        else if ([action isEqualToString:@"setMultipleKeysColor"]) {
-            int r = [dict[@"r"] intValue];
-            int g = [dict[@"g"] intValue];
-            int b = [dict[@"b"] intValue];
-            /* Apply color across keyboard matrix via Mode Const (0) */
-            keyrox_set_color(dev, (uint8_t)r, (uint8_t)g, (uint8_t)b);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"💡 Статичный цвет установлен на всю клавиатуру. (Индивидуальные зоны клавиш настраиваются аппаратно через Fn + Pause)"}];
-            });
+        else if ([action isEqualToString:@"setMatrix"]) {
+            NSArray *matrix = dict[@"colors"];
+            result = -1;
+            if ([matrix isKindOfClass:[NSArray class]] && matrix.count == KEYROX_TKL_KEY_COUNT) {
+                keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
+                for (NSUInteger i = 0; i < matrix.count; i++) {
+                    NSDictionary *color = matrix[i];
+                    colors[i] = (keyrox_color_t){[color[@"r"] unsignedCharValue], [color[@"g"] unsignedCharValue],
+                                                 [color[@"b"] unsignedCharValue], 255};
+                }
+                result = keyrox_stream_matrix(dev, colors, KEYROX_TKL_KEY_COUNT);
+            }
         }
         else if ([action isEqualToString:@"setKeyRemap"]) {
             int keyIdx = [dict[@"keyIndex"] intValue];
@@ -603,19 +602,22 @@
             keyrox_save_settings(dev);
         }
         else if ([action isEqualToString:@"resetLedCustom"] || [action isEqualToString:@"restoreDefaultModes"]) {
-            keyrox_restore_default_modes(dev);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"🌈 Заводские цвета всех 18 режимов успешно восстановлены!"}];
-            });
+            result = keyrox_restore_default_modes(dev);
         }
         else if ([action isEqualToString:@"saveSettings"]) {
-            keyrox_save_settings(dev);
+            result = keyrox_save_settings(dev);
+            if (result == 0) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self sendJSEvent:@"onToastMessage" data:@{@"message": @"Команда сохранения во Flash отправлена"}];
+                });
+            }
         }
         else if ([action isEqualToString:@"turnOff"]) {
-            keyrox_set_brightness(dev, 0);
+            result = keyrox_set_brightness(dev, 0);
         }
         else if ([action isEqualToString:@"turnOn"]) {
-            keyrox_set_brightness(dev, 4);
+            result = keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
+            if (result == 0) result = keyrox_set_brightness(dev, 4);
         }
         else if ([action isEqualToString:@"restoreDefaults"]) {
             keyrox_restore_default_modes(dev);
@@ -627,6 +629,13 @@
                 [self sendJSEvent:@"onToastMessage" data:@{@"message": @"⚙️ Заводские настройки клавиатуры полностью восстановлены!"}];
             });
         }
+
+        if (result != 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self sendJSEvent:@"onToastMessage" data:@{@"message": @"Клавиатура не подтвердила изменение"}];
+            });
+        }
+        if (![action isEqualToString:@"getStatus"]) [self checkDeviceStatus];
     });
 }
 
@@ -652,8 +661,8 @@
 
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"Red Square Keyrox TKL",
-        NSAboutPanelOptionApplicationVersion: @"1.0.0",
-        NSAboutPanelOptionVersion: @"v1.0.0 (macOS Universal)",
+        NSAboutPanelOptionApplicationVersion: @"1.0.3",
+        NSAboutPanelOptionVersion: @"v1.0.3 (macOS Universal)",
         @"Copyright": @"Copyright © 2026 keyrox-mac contributors. All rights reserved.",
         NSAboutPanelOptionCredits: credits
     };
@@ -676,7 +685,7 @@
             if (error || (httpResp && httpResp.statusCode == 404)) {
                 NSAlert *alert = [[NSAlert alloc] init];
                 alert.messageText = @"Проверка обновлений Keyrox";
-                alert.informativeText = @"Установлена актуальная версия: v1.0.0 (macOS Universal ARM64/x86_64).\n\n"
+                alert.informativeText = @"Установлена актуальная версия: v1.0.3 (macOS Universal ARM64/x86_64).\n\n"
                                          @"Репозиторий проекта: github.com/sl1mus/keyrox-mac\n"
                                          @"Вы можете открыть страницу релизов на GitHub для просмотра истории и новостей.";
                 [alert addButtonWithTitle:@"Открыть GitHub Релизы"];
@@ -694,7 +703,7 @@
                 NSString *htmlUrl = json[@"html_url"] ?: @"https://github.com/sl1mus/keyrox-mac/releases";
                 NSString *releaseName = json[@"name"] ?: latestTag;
 
-                NSString *currentVer = @"v1.0.0";
+                NSString *currentVer = @"v1.0.3";
                 if ([latestTag length] > 0 && ![latestTag isEqualToString:currentVer]) {
                     NSAlert *alert = [[NSAlert alloc] init];
                     alert.messageText = [NSString stringWithFormat:@"Доступно обновление: %@", latestTag];
@@ -713,7 +722,7 @@
                 }
             } else {
                 NSAlert *alert = [[NSAlert alloc] init];
-                alert.messageText = @"Keyrox Control v1.0.0";
+                alert.messageText = @"Keyrox Control v1.0.3";
                 alert.informativeText = @"Не удалось связаться с сервером обновлений. Проверьте подключение к сети.";
                 [alert addButtonWithTitle:@"ОК"];
                 [alert runModal];
@@ -772,7 +781,7 @@
                       usingBlock:^(NSNotification *note) {
         (void)note;
         NSLog(@"[Keyrox Watchdog] Display woke up (NSWorkspaceScreensDidWakeNotification)!");
-        [self autoReviveOnWake:@"Пробуждение дисплея"];
+        [self reviveDeviceOnWake:YES];
     }];
 
     [wsCenter addObserverForName:NSWorkspaceDidWakeNotification
@@ -781,20 +790,24 @@
                       usingBlock:^(NSNotification *note) {
         (void)note;
         NSLog(@"[Keyrox Watchdog] System woke up (NSWorkspaceDidWakeNotification)!");
-        [self autoReviveOnWake:@"Выход Mac из сна"];
+        [self reviveDeviceOnWake:YES];
     }];
 }
 
-- (void)autoReviveOnWake:(NSString *)reason {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        int rc = keyrox_usb_bus_reset();
-        NSLog(@"[Keyrox Watchdog] Auto-Revive triggered (%@), reset result = %d", reason, rc);
-        usleep(600000);
+- (void)reviveDeviceOnWake:(BOOL)automatic {
+    dispatch_async(_hidQueue, ^{
+        NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+        if (automatic && self->_lastWakeReset > 0 && now - self->_lastWakeReset < 5) return;
+        self->_lastWakeReset = now;
+        keyrox_close(self->_dev);
+        self->_dev = NULL;
+
+        int result = keyrox_revive();
+        [self checkDeviceStatus];
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self checkDeviceStatus];
-            [self sendJSEvent:@"onToastMessage" data:@{
-                @"message": [NSString stringWithFormat:@"⚡ Клавиатура автоматически реанимирована (%@)!", reason]
-            }];
+            NSString *message = result == 0 ? @"Клавиатура отвечает после USB-сброса" :
+                @"Клавиатура не ответила после попытки USB-сброса";
+            [self sendJSEvent:@"onToastMessage" data:@{@"message": message}];
         });
     });
 }

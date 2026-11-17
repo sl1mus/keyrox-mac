@@ -88,13 +88,16 @@ keyrox_device_t *keyrox_open(void) {
         long page = 0;
         CFNumberRef np = (CFNumberRef)IOHIDDeviceGetProperty(candidate, CFSTR(kIOHIDPrimaryUsagePageKey));
         if (np) CFNumberGetValue(np, kCFNumberLongType, &page);
-        if (page == 0xff00 || page == 65280) {
+        if (page == KEYROX_USAGE_PAGE) {
             dev_ref = candidate;
             break;
         }
     }
     if (!dev_ref) {
-        dev_ref = (IOHIDDeviceRef)values[0];
+        CFRelease(dev_set);
+        IOHIDManagerClose(manager, kIOHIDOptionsTypeNone);
+        CFRelease(manager);
+        return NULL;
     }
     CFRetain(dev_ref);
     CFRelease(dev_set);
@@ -143,7 +146,7 @@ int keyrox_send_packet(keyrox_device_t *dev, const keyrox_packet_t *pkt) {
 }
 
 int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32_t offset, void *out_buf, uint16_t req_len) {
-    if (!dev || !dev->device) return -1;
+    if (!dev || !dev->device || req_len > KEYROX_PAYLOAD_MAX) return -1;
 
     keyrox_packet_t req;
     keyrox_packet_init(&req, cmd | KEYROX_CMD_READ_FLAG, subcmd, offset, NULL, req_len);
@@ -167,7 +170,8 @@ int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32
         return -1;
     }
 
-    if (in_len < 8) {
+    const size_t header_size = offsetof(keyrox_packet_t, data);
+    if (in_len < (CFIndex)(header_size + req_len)) {
         fprintf(stderr, "[-] Short response received: %ld bytes\n", (long)in_len);
         return -1;
     }
@@ -180,74 +184,98 @@ int keyrox_read_packet(keyrox_device_t *dev, uint8_t cmd, uint8_t subcmd, uint32
     }
 
     if (out_buf && req_len > 0) {
-        uint16_t copy_len = req_len;
-        if (copy_len > (in_len - 8)) {
-            copy_len = in_len - 8;
-        }
-        memcpy(out_buf, &resp_buf[8], copy_len);
+        memcpy(out_buf, &resp_buf[header_size], req_len);
     }
 
     return 0;
 }
 
-int keyrox_set_mode(keyrox_device_t *dev, keyrox_mode_t mode, keyrox_direction_t dir) {
-    if (!dev) return -1;
-    (void)dir;
-    uint8_t mode_val = (uint8_t)mode;
+static int read_effect(keyrox_device_t *dev, uint8_t *effect) {
+    if (keyrox_read_packet(dev, KEYROX_CMD_EFFECT, 0, 0, effect, 1) != 0) return -1;
+    return keyrox_mode_from_wire(*effect) < 0 ? -1 : 0;
+}
 
+static int select_effect(keyrox_device_t *dev, uint8_t effect) {
     keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_MODE, 0, 0, &mode_val, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-    if (rc == 0) {
-        usleep(30000);
-        keyrox_save_settings(dev);
-    }
-    return rc;
+    keyrox_packet_init(&pkt, KEYROX_CMD_EFFECT, 0, 0, &effect, 1);
+    if (keyrox_send_packet(dev, &pkt) != 0) return -1;
+    uint8_t active;
+    return read_effect(dev, &active) == 0 && active == effect ? 0 : -1;
+}
+
+enum { MODE_BRIGHTNESS = 0, MODE_FLAGS = 1, MODE_SPEED = 2, MODE_COLORS = 3, MODE_PARAM_SIZE = 9 };
+
+static int read_mode_params(keyrox_device_t *dev, uint8_t effect, uint8_t params[MODE_PARAM_SIZE]) {
+    return keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, effect, 0, params, MODE_PARAM_SIZE);
+}
+
+static int write_mode_params(keyrox_device_t *dev, uint8_t effect, const uint8_t params[MODE_PARAM_SIZE]) {
+    keyrox_packet_t pkt;
+    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, effect, 0, params, MODE_PARAM_SIZE);
+    if (keyrox_send_packet(dev, &pkt) != 0) return -1;
+
+    uint8_t actual[MODE_PARAM_SIZE];
+    if (read_mode_params(dev, effect, actual) != 0) return -1;
+    return memcmp(actual, params, sizeof(actual)) == 0 ? 0 : -1;
+}
+
+int keyrox_set_mode(keyrox_device_t *dev, keyrox_mode_t mode, keyrox_direction_t dir) {
+    (void)dir;
+    if (mode == KEYROX_MODE_OFF) return keyrox_set_brightness(dev, 0);
+
+    int effect = keyrox_mode_to_wire(mode);
+    if (effect < 0) return -1;
+    return select_effect(dev, (uint8_t)effect);
 }
 
 int keyrox_set_brightness(keyrox_device_t *dev, uint8_t level) {
-    if (!dev) return -1;
-    if (level > 4) level = 4;
-
-    /* Map discrete level 0..4 to controller scale 0..127 */
-    static const uint8_t s_bright_map[5] = { 0, 32, 64, 96, 127 };
-    uint8_t raw_val = s_bright_map[level];
-
-    keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 0, 0, &raw_val, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-    if (rc == 0) {
-        usleep(30000);
-        keyrox_save_settings(dev);
-    }
-    return rc;
+    static const uint8_t levels[] = {0, 32, 64, 96, 127};
+    if (level > 4) return -1;
+    uint8_t effect, params[MODE_PARAM_SIZE];
+    if (read_effect(dev, &effect) != 0 || keyrox_mode_from_wire(effect) == KEYROX_MODE_CUSTOM ||
+        read_mode_params(dev, effect, params) != 0) return -1;
+    params[MODE_BRIGHTNESS] = levels[level];
+    params[MODE_FLAGS] = 0xff;
+    return write_mode_params(dev, effect, params);
 }
 
 int keyrox_set_speed(keyrox_device_t *dev, uint8_t speed) {
-    if (!dev) return -1;
-    if (speed > 4) speed = 4;
+    if (speed > 4) return -1;
+    uint8_t effect, params[MODE_PARAM_SIZE];
+    if (read_effect(dev, &effect) != 0 || keyrox_mode_from_wire(effect) == KEYROX_MODE_CUSTOM ||
+        read_mode_params(dev, effect, params) != 0) return -1;
+    params[MODE_SPEED] = (params[MODE_SPEED] & 0xf0) | speed;
+    params[MODE_FLAGS] = 0xff;
+    return write_mode_params(dev, effect, params);
+}
 
-    keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_SPEED_BRIGHT, 1, 0, &speed, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-    if (rc == 0) {
-        usleep(30000);
-        keyrox_save_settings(dev);
+int keyrox_set_direction(keyrox_device_t *dev, keyrox_direction_t dir) {
+    static const uint8_t wave_directions[] = {0x10, 0x00, 0x20, 0x30};
+    uint8_t effect, params[MODE_PARAM_SIZE];
+    if ((unsigned)dir >= sizeof(wave_directions) || read_effect(dev, &effect) != 0) return -1;
+
+    uint8_t direction;
+    switch (keyrox_mode_from_wire(effect)) {
+        case KEYROX_MODE_WAVE:
+            direction = wave_directions[dir];
+            break;
+        case KEYROX_MODE_RAIN:
+        case KEYROX_MODE_ROTATE:
+            if (dir != KEYROX_DIR_TOP && dir != KEYROX_DIR_BOTTOM) return -1;
+            direction = dir == KEYROX_DIR_TOP ? 0xa0 : 0xb0;
+            break;
+        default:
+            return -1;
     }
-    return rc;
+    if (read_mode_params(dev, effect, params) != 0) return -1;
+    params[MODE_SPEED] = (params[MODE_SPEED] & 0x0f) | direction;
+    params[MODE_FLAGS] = 0xff;
+    return write_mode_params(dev, effect, params);
 }
 
 int keyrox_set_profile(keyrox_device_t *dev, uint8_t profile) {
-    if (!dev) return -1;
-    if (profile > 4) profile = 4;
-    keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_PROFILE, 0, 0, &profile, 1);
-    int rc = keyrox_send_packet(dev, &pkt);
-    if (rc == 0) {
-        usleep(30000);
-        keyrox_save_settings(dev);
-    }
-    return rc;
+    if (profile > 4) return -1;
+    return select_effect(dev, profile);
 }
 
 int keyrox_set_key_remap(keyrox_device_t *dev, uint8_t key_index, uint16_t target_code) {
@@ -281,35 +309,25 @@ int keyrox_save_settings(keyrox_device_t *dev) {
 }
 
 int keyrox_stream_matrix(keyrox_device_t *dev, const keyrox_color_t *colors, size_t count) {
-    if (!dev || !colors || count == 0) return -1;
+    if (!dev || !colors || count != KEYROX_TKL_KEY_COUNT) return -1;
+    if (select_effect(dev, (uint8_t)keyrox_mode_to_wire(KEYROX_MODE_CUSTOM)) != 0) return -1;
     keyrox_packet_t pkt;
     keyrox_matrix_packet_init(&pkt, colors, count);
     return keyrox_send_packet(dev, &pkt);
 }
 
 int keyrox_set_mode_colors(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t fg_r, uint8_t fg_g, uint8_t fg_b, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b) {
-    if (!dev) return -1;
+    int effect = keyrox_mode_to_wire(mode);
+    if (effect < 0 || mode == KEYROX_MODE_CUSTOM) return -1;
+    uint8_t params[MODE_PARAM_SIZE];
+    if (read_mode_params(dev, (uint8_t)effect, params) != 0) return -1;
 
-    /* 9-byte mode parameters block: [brightness, flags, speed, R, G, B, bgR, bgG, bgB]
-     * In GK8911M wire protocol (confirmed by Windows disassembly at 0x41a5be):
-     * - subcmd = mode index (0..17)
-     * - offset = 0
-     * - len = 9
-     */
-    uint8_t params[9] = { 0x7f, 0x40, 0x34, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b };
-
-    keyrox_packet_t pkt;
-    keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, (uint8_t)mode, 0, params, 9);
-    int rc = keyrox_send_packet(dev, &pkt);
-    if (rc == 0) {
-        usleep(30000);
-        /* Re-apply mode so the MCU activates the new color immediately in RAM */
-        keyrox_set_mode(dev, mode, KEYROX_DIR_LEFT);
-        usleep(30000);
-        /* Commit to hardware Flash memory */
-        keyrox_save_settings(dev);
-    }
-    return rc;
+    const uint8_t colors[] = {fg_r, fg_g, fg_b, bg_r, bg_g, bg_b};
+    memcpy(&params[MODE_COLORS], colors, sizeof(colors));
+    params[MODE_FLAGS] = 0xff;
+    params[MODE_SPEED] &= 0x7f;
+    if (select_effect(dev, (uint8_t)effect) != 0) return -1;
+    return write_mode_params(dev, (uint8_t)effect, params);
 }
 
 int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, uint8_t g, uint8_t b) {
@@ -317,24 +335,8 @@ int keyrox_set_mode_color(keyrox_device_t *dev, keyrox_mode_t mode, uint8_t r, u
 }
 
 int keyrox_set_color(keyrox_device_t *dev, uint8_t r, uint8_t g, uint8_t b) {
-    if (!dev) return -1;
-
-    /* Setting static single color on GK8911M:
-     * 1. Write RGB to Mode 0 (KEYROX_MODE_CONST) entry at index 0
-     * 2. Switch mode to CONST
-     * 3. Ensure brightness is set to max (4/4)
-     * 4. Commit to Flash
-     */
-    int rc = keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b);
-    if (rc == 0) {
-        usleep(30000);
-        keyrox_set_mode(dev, KEYROX_MODE_CONST, KEYROX_DIR_LEFT);
-        usleep(30000);
-        keyrox_set_brightness(dev, 4);
-        usleep(30000);
-        keyrox_save_settings(dev);
-    }
-    return rc;
+    if (keyrox_set_mode_color(dev, KEYROX_MODE_CONST, r, g, b) != 0) return -1;
+    return keyrox_set_brightness(dev, 4);
 }
 
 uint32_t keyrox_get_pid(keyrox_device_t *dev) {
@@ -381,59 +383,41 @@ int keyrox_restore_default_modes(keyrox_device_t *dev) {
     };
 
     for (uint8_t m = 0; m < 18; ++m) {
-        keyrox_packet_t pkt;
-        keyrox_packet_init(&pkt, KEYROX_CMD_CUSTOM_LED, m, 0, default_table[m], 9);
-        keyrox_send_packet(dev, &pkt);
-        usleep(30000); /* 30ms pacing for Flash write cycle */
+        int effect = keyrox_mode_to_wire((keyrox_mode_t)m);
+        if (effect >= 0 && m != KEYROX_MODE_CUSTOM &&
+            write_mode_params(dev, (uint8_t)effect, default_table[m]) != 0) return -1;
     }
 
-    keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-    usleep(30000);
-    keyrox_set_brightness(dev, 4);
-    usleep(30000);
-    keyrox_set_speed(dev, 2);
-    usleep(30000);
-    keyrox_save_settings(dev);
-    return 0;
+    if (keyrox_set_mode(dev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT) != 0 ||
+        keyrox_set_brightness(dev, 4) != 0 || keyrox_set_speed(dev, 2) != 0) return -1;
+    return keyrox_save_settings(dev);
 }
 
 int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *out_bright, uint8_t *out_speed, uint8_t *out_profile, char *fw_version, size_t fw_ver_len) {
     if (!dev) return -1;
 
-    /* 1. Read Mode (1 byte) - Required hardware check */
-    uint8_t mode_val = 0;
-    if (keyrox_read_packet(dev, KEYROX_CMD_MODE, 0, 0, &mode_val, 1) != 0) {
-        return -1; /* Fail honestly if keyboard is unresponsive or disconnected */
-    }
-    if (out_mode) *out_mode = (keyrox_mode_t)mode_val;
+    uint8_t effect;
+    if (read_effect(dev, &effect) != 0) return -1;
+    keyrox_mode_t mode = (keyrox_mode_t)keyrox_mode_from_wire(effect);
 
-    /* 2. Read Profile (1 byte, 0-based on wire 0..4, consistent with GUI) */
-    uint8_t profile_val = 0;
-    if (keyrox_read_packet(dev, KEYROX_CMD_PROFILE, 0, 0, &profile_val, 1) == 0) {
-        if (out_profile) *out_profile = profile_val;
-    }
+    uint8_t params[MODE_PARAM_SIZE] = {0};
+    if ((out_bright || out_speed) && mode != KEYROX_MODE_CUSTOM &&
+        read_mode_params(dev, effect, params) != 0) return -1;
 
-    /* 3. Read Brightness & Speed from current mode parameters block (CMD_05, len 9)
-     * GK8911M stores brightness in byte 0 (0..127) and speed in byte 2 (0..4) of mode block.
-     * Reading CMD_05 with subcmd=current_mode is fast, reliable, and does not stall the USB endpoint.
-     */
-    uint8_t cur_params[9] = {0};
-    if (keyrox_read_packet(dev, KEYROX_CMD_CUSTOM_LED, mode_val, 0, cur_params, 9) == 0) {
-        uint8_t raw_bright = cur_params[0];
-        if (out_bright) {
-            if (raw_bright == 0) *out_bright = 0;
-            else if (raw_bright < 48) *out_bright = 1;
-            else if (raw_bright < 80) *out_bright = 2;
-            else if (raw_bright < 112) *out_bright = 3;
-            else *out_bright = 4;
-        }
-        uint8_t raw_speed = cur_params[2];
-        if (out_speed) {
-            *out_speed = raw_speed > 4 ? 4 : raw_speed;
-        }
-    } else {
-        if (out_bright) *out_bright = 4;
-        if (out_speed) *out_speed = 2;
+    if (out_mode) *out_mode = mode;
+    if (out_profile) *out_profile = effect < 4 ? effect : KEYROX_NO_PRESET;
+    if (out_bright) {
+        const uint8_t raw = params[MODE_BRIGHTNESS];
+        if (mode == KEYROX_MODE_CUSTOM) *out_bright = 4;
+        else if (raw == 0) *out_bright = 0;
+        else if (raw < 48) *out_bright = 1;
+        else if (raw < 80) *out_bright = 2;
+        else if (raw < 112) *out_bright = 3;
+        else *out_bright = 4;
+    }
+    if (out_speed) {
+        const uint8_t raw = params[MODE_SPEED] & 0x0f;
+        *out_speed = raw > 4 ? 4 : raw;
     }
 
     /* 4. Read Device Info (FW version) */
@@ -443,7 +427,9 @@ int keyrox_get_status(keyrox_device_t *dev, keyrox_mode_t *out_mode, uint8_t *ou
             char found_str[64] = {0};
             for (size_t i = 0; i < sizeof(dev_info) - 8; ++i) {
                 if (dev_info[i] == 'G' && dev_info[i+1] == 'K' && dev_info[i+2] == '8') {
-                    strncpy(found_str, (char *)&dev_info[i], sizeof(found_str) - 1);
+                    size_t available = sizeof(dev_info) - i;
+                    size_t copied = available < sizeof(found_str) - 1 ? available : sizeof(found_str) - 1;
+                    memcpy(found_str, &dev_info[i], copied);
                     break;
                 }
             }

@@ -42,6 +42,28 @@ void keyrox_packet_init(keyrox_packet_t *pkt, uint8_t cmd, uint8_t subcmd, uint3
     }
 }
 
+/* Hardware selector values for 1a2c:1511 and 1a2c:2511.
+ * The CLI and GUI keep their existing mode IDs. */
+static const keyrox_mode_t effects_by_wire[] = {
+    KEYROX_MODE_WAVE, KEYROX_MODE_CONST, KEYROX_MODE_BREATHE,
+    KEYROX_MODE_HEARTRATE, KEYROX_MODE_POINT, KEYROX_MODE_RAIN,
+    KEYROX_MODE_STARS, KEYROX_MODE_SPECTRUM, KEYROX_MODE_PLUMFLOWER,
+    KEYROX_MODE_SHOOT, KEYROX_MODE_ROTATE, KEYROX_MODE_CIRCLE_DIFFUSION,
+    KEYROX_MODE_CUSTOM
+};
+
+int keyrox_mode_to_wire(keyrox_mode_t mode) {
+    for (size_t i = 0; i < sizeof(effects_by_wire) / sizeof(effects_by_wire[0]); ++i) {
+        if (effects_by_wire[i] == mode) return (int)i;
+    }
+    return -1;
+}
+
+int keyrox_mode_from_wire(uint8_t wire) {
+    if (wire >= sizeof(effects_by_wire) / sizeof(effects_by_wire[0])) return -1;
+    return effects_by_wire[wire];
+}
+
 const char *keyrox_mode_to_string(keyrox_mode_t mode) {
     if ((int)mode >= 0 && (int)mode < KEYROX_MODE_COUNT) {
         return s_mode_names[mode];
@@ -80,9 +102,8 @@ int keyrox_string_to_mode(const char *str) {
 void keyrox_matrix_packet_init(keyrox_packet_t *pkt, const keyrox_color_t *colors, size_t count) {
     if (!pkt) return;
     memset(pkt, 0, sizeof(keyrox_packet_t));
-    pkt->cmd = KEYROX_CMD_MATRIX_STREAM; /* 0xB0 */
-    pkt->subcmd = 0x01;
-    pkt->len = KEYROX_PAYLOAD_MAX;
+    pkt->cmd = KEYROX_CMD_REMAP;
+    pkt->len = KEYROX_MATRIX_FRAME_LENGTH;
 
     if (!colors || count == 0) return;
 

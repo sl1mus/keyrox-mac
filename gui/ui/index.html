@@ -13,7 +13,7 @@
       <div class="brand">
         <img src="assets/logo.svg" alt="Keyrox Logo" class="brand-logo">
         <span class="brand-title">RED SQUARE KEYROX TKL</span>
-        <span class="brand-subtitle">macOS Control Panel v1.0.0</span>
+        <span class="brand-subtitle">macOS Control Panel v1.0.3</span>
       </div>
       <div class="window-controls">
         <button class="win-btn win-min" id="btn-minimize" title="Свернуть">&#x2014;</button>
@@ -139,35 +139,19 @@
                   <option value="0">Const (Статичный)</option>
                   <option value="9">Breathe (Дыхание)</option>
                   <option value="8">Spectrum (Спектр)</option>
-                  <option value="2">Cross (Перекрестие)</option>
                   <option value="3">Point (Одиночный всплеск)</option>
                   <option value="4">Custom (Пользовательский)</option>
                   <option value="5">Stars (Звезды)</option>
-                  <option value="6">Snow (Снегопад)</option>
-                  <option value="7">Rain (Дождь)</option>
-                  <option value="10">Line Diffusion (Линейная диффузия)</option>
+                  <option value="7">Winnower (Ветер)</option>
                   <option value="11">Plumflower (Цветок)</option>
                   <option value="12">Heartrate (Пульс)</option>
                   <option value="13">Shoot (Выстрел)</option>
                   <option value="14">Rotate (Вращение)</option>
-                  <option value="15">Rect Cone (Конус)</option>
                   <option value="16">Circle Diffusion (Круги на воде)</option>
-                  <option value="18">MultiLayer (Многослойный)</option>
-                  <option value="19">MultiZone (Зональный)</option>
                   <option value="17">Close (Выключить подсветку)</option>
                 </select>
               </div>
 
-              <div class="form-group flex-1">
-                <label for="led-custom-slot">Custom слот:</label>
-                <select id="led-custom-slot" class="custom-select">
-                  <option value="0">Custom 1</option>
-                  <option value="1">Custom 2</option>
-                  <option value="2">Custom 3</option>
-                  <option value="3">Custom 4</option>
-                  <option value="4">Custom 5</option>
-                </select>
-              </div>
             </div>
 
             <!-- Direction Selector (6 Directions) -->
@@ -178,8 +162,6 @@
                 <button class="dir-btn" data-dir="1" title="Вправо">▶ Вправо</button>
                 <button class="dir-btn" data-dir="2" title="Вверх">▲ Вверх</button>
                 <button class="dir-btn" data-dir="3" title="Вниз">▼ Вниз</button>
-                <button class="dir-btn" data-dir="4" title="По часовой">↻ По часовой</button>
-                <button class="dir-btn" data-dir="5" title="Против часовой">↺ Против часовой</button>
               </div>
             </div>
 
@@ -437,16 +419,6 @@
               Кликните по любой клавише на визуальной клавиатуре выше, чтобы выделить её. Затем выберите оттенок в палитре справа и примените цвет.
             </p>
             
-            <div class="form-group">
-              <label for="custom-matrix-slot">Слот матрицы (Custom Slot):</label>
-              <select id="custom-matrix-slot" class="custom-select">
-                <option value="0">Custom 1</option>
-                <option value="1">Custom 2</option>
-                <option value="2">Custom 3</option>
-                <option value="3">Custom 4</option>
-                <option value="4">Custom 5</option>
-              </select>
-            </div>
 
             <div class="actions-group-vertical" style="margin-top: auto;">
               <button class="btn btn-primary" id="btn-matrix-apply">Покрасить выбранные клавиши</button>
@@ -557,7 +529,7 @@
             <div class="info-list">
               <div class="info-item">
                 <span class="info-key">Приложение</span>
-                <span class="info-val code text-orange">Keyrox v1.0.0</span>
+                <span class="info-val code text-orange">Keyrox v1.0.3</span>
               </div>
               <div class="info-item">
                 <span class="info-key">Архитектура</span>

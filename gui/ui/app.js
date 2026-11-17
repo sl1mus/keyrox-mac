@@ -289,7 +289,6 @@
     // 3. Commit to physical keyboard hardware Flash
     sendToNative({ action: 'saveSettings' });
 
-    showToast(`Профиль P${p + 1} сохранен в память Flash и на диск!`);
   }
 
   function loadProfile(p) {
@@ -377,7 +376,7 @@
       btn.classList.add('active');
       const dir = parseInt(btn.dataset.dir, 10);
       state.currentDir = dir;
-      sendToNative({ action: 'setMode', mode: state.currentMode, dir: dir });
+      sendToNative({ action: 'setDirection', dir });
     });
   });
 
@@ -385,24 +384,26 @@
     const val = parseInt(sliderBrightness.value, 10);
     state.currentBrightness = val;
     if (valBrightness) valBrightness.textContent = `${val} / 4`;
-    sendToNative({ action: 'setBrightness', value: val });
+  });
+  sliderBrightness?.addEventListener('change', () => {
+    sendToNative({ action: 'setBrightness', value: Number(sliderBrightness.value) });
   });
 
   sliderSpeed?.addEventListener('input', () => {
     const val = parseInt(sliderSpeed.value, 10);
     state.currentSpeed = val;
     if (valSpeed) valSpeed.textContent = `${val} / 4`;
-    sendToNative({ action: 'setSpeed', value: val });
+  });
+  sliderSpeed?.addEventListener('change', () => {
+    sendToNative({ action: 'setSpeed', value: Number(sliderSpeed.value) });
   });
 
   document.getElementById('btn-led-off')?.addEventListener('click', () => {
     sendToNative({ action: 'turnOff' });
-    if (modeSelect) modeSelect.value = "17"; // Close
   });
 
   document.getElementById('btn-led-on')?.addEventListener('click', () => {
     sendToNative({ action: 'turnOn' });
-    if (modeSelect) modeSelect.value = "1"; // Wave
   });
 
   // 6. Dual Color Palette (Foreground / Background)
@@ -460,10 +461,11 @@
     updatePaletteUI();
   }
 
-  function applyCurrentColor() {
+  function applyCurrentColor(mode = state.currentMode) {
+    if (![0, 3, 5, 9, 11, 12, 13, 16].includes(mode)) return;
     sendToNative({
       action: 'setColor',
-      mode: state.currentMode,
+      mode,
       r: state.fgColor.r,
       g: state.fgColor.g,
       b: state.fgColor.b,
@@ -477,9 +479,9 @@
   sliderG?.addEventListener('input', onRgbSliderChange);
   sliderB?.addEventListener('input', onRgbSliderChange);
 
-  sliderR?.addEventListener('change', applyCurrentColor);
-  sliderG?.addEventListener('change', applyCurrentColor);
-  sliderB?.addEventListener('change', applyCurrentColor);
+  [sliderR, sliderG, sliderB].forEach(slider => {
+    slider?.addEventListener('change', () => applyCurrentColor());
+  });
 
   document.querySelectorAll('#tab-panel-led .palette-swatches .swatch').forEach(sw => {
     sw.addEventListener('click', () => {
@@ -491,13 +493,12 @@
       }
       updatePaletteUI();
       applyCurrentColor();
-      showToast(`Цвет применен к режиму`);
     });
   });
 
   document.getElementById('btn-apply-all-color')?.addEventListener('click', () => {
-    applyCurrentColor();
-    showToast('Цвет применен ко всей клавиатуре');
+    const color = state.activeLayer === 'fg' ? state.fgColor : state.bgColor;
+    sendToNative({ action: 'setColor', ...color });
   });
 
   document.getElementById('btn-apply-selected-color')?.addEventListener('click', () => {
@@ -505,15 +506,8 @@
       alert('Пожалуйста, выделите хотя бы одну клавишу на клавиатуре.');
       return;
     }
-    const col = state.activeLayer === 'fg' ? state.fgColor : state.bgColor;
-    sendToNative({
-      action: 'setMultipleKeysColor',
-      keys: Array.from(state.selectedKeys),
-      r: col.r,
-      g: col.g,
-      b: col.b
-    });
-    showToast(`Цвет применен к ${state.selectedKeys.size} клавишам`);
+    const color = state.activeLayer === 'fg' ? state.fgColor : state.bgColor;
+    applyMatrixColors(state.selectedKeys, color);
   });
 
   document.getElementById('btn-save-flash')?.addEventListener('click', () => {
@@ -652,69 +646,38 @@
     });
   });
 
+  function applyMatrixColors(keys, color) {
+    for (const idx of keys) {
+      if (color) state.keyCustomColors.set(idx, { ...color });
+      else state.keyCustomColors.delete(idx);
+      const el = document.getElementById("key-" + idx);
+      if (el) el.style.backgroundColor = color ? "rgb(" + [color.r, color.g, color.b].join(",") + ")" : "";
+    }
+    const colors = new Array(KEYROX_KEYS.length);
+    KEYROX_KEYS.forEach(({ idx }) => {
+      colors[idx] = state.keyCustomColors.get(idx) || { r: 0, g: 0, b: 0 };
+    });
+    sendToNative({ action: 'setMatrix', colors });
+  }
+
   document.getElementById('btn-matrix-apply')?.addEventListener('click', () => {
     if (state.selectedKeys.size === 0) {
       alert('Пожалуйста, выделите хотя бы одну клавишу на клавиатуре.');
       return;
     }
-    const col = state.matrixColor;
-    state.selectedKeys.forEach(idx => {
-      state.keyCustomColors.set(idx, { ...col });
-      const el = document.getElementById(`key-${idx}`);
-      if (el) el.style.backgroundColor = `rgb(${col.r}, ${col.g}, ${col.b})`;
-    });
-
-    sendToNative({
-      action: 'setMultipleKeysColor',
-      keys: Array.from(state.selectedKeys),
-      r: col.r,
-      g: col.g,
-      b: col.b
-    });
-    showToast(`Покрашено ${state.selectedKeys.size} клавиш`);
+    applyMatrixColors(state.selectedKeys, state.matrixColor);
   });
 
   document.getElementById('btn-matrix-all')?.addEventListener('click', () => {
-    const col = state.matrixColor;
-    KEYROX_KEYS.forEach(k => {
-      state.keyCustomColors.set(k.idx, { ...col });
-      const el = document.getElementById(`key-${k.idx}`);
-      if (el) el.style.backgroundColor = `rgb(${col.r}, ${col.g}, ${col.b})`;
-    });
-
-    sendToNative({
-      action: 'setMultipleKeysColor',
-      keys: KEYROX_KEYS.map(k => k.idx),
-      r: col.r,
-      g: col.g,
-      b: col.b
-    });
-    showToast('Вся клавиатура залита выбранным цветом');
+    applyMatrixColors(KEYROX_KEYS.map(key => key.idx), state.matrixColor);
   });
 
   document.getElementById('btn-matrix-clear-sel')?.addEventListener('click', () => {
-    if (state.selectedKeys.size === 0) return;
-    state.selectedKeys.forEach(idx => {
-      state.keyCustomColors.delete(idx);
-      const el = document.getElementById(`key-${idx}`);
-      if (el) el.style.backgroundColor = '';
-    });
-
-    sendToNative({
-      action: 'setMultipleKeysColor',
-      keys: Array.from(state.selectedKeys),
-      r: 0,
-      g: 0,
-      b: 0
-    });
-    showToast('Выбранные клавиши погашены');
+    if (state.selectedKeys.size > 0) applyMatrixColors(state.selectedKeys, null);
   });
 
   document.getElementById('btn-matrix-clear-all')?.addEventListener('click', () => {
-    state.keyCustomColors.clear();
-    document.querySelectorAll('.keycap').forEach(el => el.style.backgroundColor = '');
-    sendToNative({ action: 'resetLedCustom' });
-    showToast('Матрица очищена');
+    applyMatrixColors(KEYROX_KEYS.map(key => key.idx), null);
   });
 
   document.getElementById('btn-matrix-save')?.addEventListener('click', () => {
@@ -747,7 +710,6 @@
     state.keyCustomColors.clear();
     document.querySelectorAll('.keycap').forEach(el => el.style.backgroundColor = '');
     sendToNative({ action: 'resetLedCustom' });
-    showToast('Заводские цвета всех 18 режимов восстановлены');
   });
 
   document.getElementById('btn-reset-macro-settings')?.addEventListener('click', () => {
@@ -843,11 +805,23 @@
     }
 
     const prevProfile = state.currentProfile;
+    const hasPreset = Number.isInteger(status.profile);
+    if (!hasPreset) document.querySelectorAll('.profile-btn').forEach(btn => btn.classList.remove('active'));
+    else if (status.profile === prevProfile) {
+      document.querySelectorAll('.profile-btn').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.profile) === status.profile));
+    }
+
+    document.querySelectorAll('.dir-btn').forEach(btn => {
+      const verticalOnly = [7, 14].includes(status.mode);
+      btn.disabled = status.mode !== 1 && (!verticalOnly || Number(btn.dataset.dir) < 2);
+    });
+    if (sliderSpeed) sliderSpeed.disabled = [0, 4].includes(status.mode);
+    if (sliderBrightness) sliderBrightness.disabled = status.mode === 4;
 
     // 1. Initial full hardware sync or hardware profile switch or manual user reload
-    if (!initialHardwareSynced || (status.profile !== undefined && status.profile !== prevProfile)) {
+    if (!initialHardwareSynced || (hasPreset && status.profile !== prevProfile)) {
       initialHardwareSynced = true;
-      if (status.profile !== undefined) {
+      if (hasPreset) {
         state.currentProfile = status.profile;
         document.querySelectorAll('.profile-btn').forEach(btn => {
           btn.classList.toggle('active', parseInt(btn.dataset.profile, 10) === status.profile);
@@ -909,7 +883,7 @@
     }
 
     // 2. Periodic poll: update hardware values only if not currently focused by user
-    if (status.mode !== undefined && status.mode !== state.currentMode && document.activeElement !== modeSelect) {
+    if (status.mode !== undefined && status.mode !== state.currentMode) {
       state.currentMode = status.mode;
       if (modeSelect) modeSelect.value = status.mode.toString();
     }

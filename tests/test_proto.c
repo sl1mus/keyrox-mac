@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "../keyrox_proto.h"
+#include "../keyrox_keys.h"
 
 static int g_tests_run = 0;
 static int g_tests_passed = 0;
@@ -25,9 +26,9 @@ TEST(test_packet_struct_size) {
 TEST(test_packet_init_basic) {
     keyrox_packet_t pkt;
     uint8_t payload[4] = {0x01, 0x02, 0x03, 0x04};
-    keyrox_packet_init(&pkt, KEYROX_CMD_MODE, 0x01, 0x12345678, payload, sizeof(payload));
+    keyrox_packet_init(&pkt, KEYROX_CMD_EFFECT, 0x01, 0x12345678, payload, sizeof(payload));
 
-    assert(pkt.cmd == KEYROX_CMD_MODE);
+    assert(pkt.cmd == KEYROX_CMD_EFFECT);
     assert(pkt.subcmd == 0x01);
     assert(pkt.offset == 0x12345678);
     assert(pkt.len == 4);
@@ -38,7 +39,7 @@ TEST(test_packet_init_basic) {
     uint8_t *raw = (uint8_t *)&pkt;
     assert(raw[0] == 0x78 && raw[1] == 0x56 && raw[2] == 0x34 && raw[3] == 0x12); /* offset */
     assert(raw[4] == 0x04 && raw[5] == 0x00); /* len */
-    assert(raw[6] == KEYROX_CMD_MODE); /* cmd */
+    assert(raw[6] == KEYROX_CMD_EFFECT); /* cmd */
     assert(raw[7] == 0x01); /* subcmd */
     assert(raw[8] == 0x01 && raw[9] == 0x02 && raw[10] == 0x03 && raw[11] == 0x04); /* data */
 }
@@ -120,30 +121,48 @@ TEST(test_multi_pid_definitions) {
 
 TEST(test_matrix_stream_packet) {
     keyrox_packet_t pkt;
-    keyrox_color_t colors[87];
-    for (int i = 0; i < 87; i++) {
+    assert(KEYROX_TKL_KEY_COUNT == 87);
+    assert(strcmp(KEYROX_TKL_KEYS[81].name, "Fn") == 0);
+    assert(strcmp(KEYROX_TKL_KEYS[86].name, "ArrowRight") == 0);
+    keyrox_color_t colors[KEYROX_TKL_KEY_COUNT];
+    for (size_t i = 0; i < KEYROX_TKL_KEY_COUNT; ++i) {
         colors[i].r = (uint8_t)(i + 1);
         colors[i].g = (uint8_t)(i + 2);
         colors[i].b = (uint8_t)(i + 3);
         colors[i].brightness = 0x80;
     }
 
-    keyrox_matrix_packet_init(&pkt, colors, 87);
+    keyrox_matrix_packet_init(&pkt, colors, KEYROX_TKL_KEY_COUNT);
 
-    assert(pkt.cmd == KEYROX_CMD_MATRIX_STREAM);
-    assert(pkt.cmd == 0xB0);
-    assert(pkt.subcmd == 0x01);
-    assert(pkt.len == KEYROX_PAYLOAD_MAX);
+    const uint8_t *wire = (const uint8_t *)&pkt;
+    const uint8_t header[] = {0, 0, 0, 0, 0xb0, 0x01, 0x07, 0};
+    assert(memcmp(wire, header, sizeof(header)) == 0);
 
     /* First key (Esc, pos = 0) -> pkt.data[0..3] */
     assert(pkt.data[0] == 1);
     assert(pkt.data[1] == 2);
     assert(pkt.data[2] == 3);
     assert(pkt.data[3] == 0x80);
+    assert(memcmp(&pkt.data[101 * 4], &colors[81], 4) == 0); /* Fn */
+    assert(memcmp(&pkt.data[106 * 4], &colors[86], 4) == 0); /* Right arrow */
 
     /* Null pointer safety */
     keyrox_matrix_packet_init(&pkt, NULL, 0);
-    assert(pkt.cmd == 0xB0);
+    assert(memcmp(&pkt, header, sizeof(header)) == 0);
+}
+
+TEST(test_effect_selectors) {
+    assert(keyrox_mode_to_wire(KEYROX_MODE_WAVE) == 0x00);
+    assert(keyrox_mode_to_wire(KEYROX_MODE_CONST) == 0x01);
+    assert(keyrox_mode_to_wire(KEYROX_MODE_BREATHE) == 0x02);
+    assert(keyrox_mode_to_wire(KEYROX_MODE_CUSTOM) == 0x0c);
+    assert(keyrox_mode_to_wire(KEYROX_MODE_OFF) == -1);
+    for (int wire = 0; wire <= 0x0c; ++wire) {
+        int mode = keyrox_mode_from_wire((uint8_t)wire);
+        assert(mode >= 0);
+        assert(keyrox_mode_to_wire((keyrox_mode_t)mode) == wire);
+    }
+    assert(keyrox_mode_from_wire(0xff) == -1);
 }
 
 int main(void) {
@@ -159,6 +178,7 @@ int main(void) {
     RUN_TEST(test_string_to_mode_invalid);
     RUN_TEST(test_multi_pid_definitions);
     RUN_TEST(test_matrix_stream_packet);
+    RUN_TEST(test_effect_selectors);
 
     printf("\n\033[32m✔ All %d tests passed successfully!\033[0m\n\n", g_tests_passed);
     return 0;

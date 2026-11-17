@@ -63,102 +63,70 @@ static void releasePowerAssertions(void) {
 static void turnOffBacklightForSleep(void) {
     if (gBacklightTurnedOffForSleep) return;
     keyrox_device_t *dev = keyrox_open();
-    if (dev) {
-        keyrox_mode_t mode = KEYROX_MODE_CONST;
-        uint8_t bright = 0, speed = 0, profile = 1;
-        char fw[64] = {0};
-        if (keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw)) == 0) {
-            if (bright > 0) {
-                gSavedBrightness = bright;
-            }
-        }
-        keyrox_set_brightness(dev, 0);
-        keyrox_close(dev);
+    if (!dev) return;
+
+    uint8_t brightness;
+    if (keyrox_get_status(dev, NULL, &brightness, NULL, NULL, NULL, 0) == 0 &&
+        brightness > 0 && keyrox_set_brightness(dev, 0) == 0) {
+        gSavedBrightness = brightness;
         gBacklightTurnedOffForSleep = YES;
-        logMessage("🌙 [Display Sleep] Keyboard backlight dimmed to 0 (saved level: %u/4, mode preserved) to prevent USB brownout!", gSavedBrightness);
+        logMessage("Backlight dimmed for sleep (saved brightness: %u/4)", brightness);
     }
+    keyrox_close(dev);
 }
 
 static void restoreBacklightAfterWake(void) {
     if (!gBacklightTurnedOffForSleep) return;
     keyrox_device_t *dev = keyrox_open();
-    if (dev) {
-        uint8_t target = gSavedBrightness > 0 ? gSavedBrightness : 4;
-        keyrox_set_brightness(dev, target);
-        keyrox_close(dev);
+    if (!dev) return;
+
+    if (keyrox_set_brightness(dev, gSavedBrightness) == 0) {
         gBacklightTurnedOffForSleep = NO;
-        logMessage("📺 [Display Wake] Restored keyboard backlight (level: %u/4, mode preserved)!", target);
+        logMessage("Backlight brightness restored to %u/4", gSavedBrightness);
     }
+    keyrox_close(dev);
 }
 
 static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument);
 
-static void reviveKeyboard(const char *reason) {
-    logMessage("⚡ Auto-Revive triggered (reason: %s). Issuing USB Bus Reset...", reason);
-    int rc = keyrox_usb_bus_reset();
-    if (rc != 0) {
-        logMessage("[-] Bus Reset returned %d (device might be unplugged / dropped from PHY)", rc);
-        return;
+static int reviveKeyboard(const char *reason) {
+    logMessage("USB reset requested (%s)", reason);
+    int result = keyrox_revive();
+    if (result == 0) {
+        logMessage("Keyrox HID responded after USB reset");
+    } else {
+        logMessage("Keyrox recovery failed (result %d)", result);
     }
-    logMessage("[+] USB Bus Reset sent successfully. Waiting 600ms for MCU boot...");
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        keyrox_device_t *kdev = keyrox_open();
-        if (kdev) {
-            keyrox_set_mode(kdev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-            keyrox_set_brightness(kdev, gSavedBrightness > 0 ? gSavedBrightness : 4);
-            keyrox_close(kdev);
-            gKeyboardConnected = YES;
-            logMessage("[+] Keyboard revived and initialized to Wave mode (Brightness: %u)!", gSavedBrightness > 0 ? gSavedBrightness : 4);
-        } else {
-            logMessage("[!] USB Reset completed, waiting for kernel HID event driver.");
-        }
-    });
+    return result;
 }
 
 static void checkKeyboardHealth(void) {
+    static unsigned consecutiveFailures = 0;
+    static BOOL recoveryAttempted = NO;
     keyrox_device_t *dev = keyrox_open();
-    if (!dev) {
-        if (gKeyboardConnected) {
-            logMessage("[!] Health check: Keyrox TKL became unresponsive, attempting auto-revive...");
-            gKeyboardConnected = NO;
-            reviveKeyboard("Health check failed");
-        }
-        return;
-    }
-
-    // Active heartbeat: query hardware status to ensure USB pipe is actively serviced
-    keyrox_mode_t mode = KEYROX_MODE_CONST;
-    uint8_t bright = 0, speed = 0, profile = 1;
-    char fw[64] = {0};
-    int rc = keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw));
+    int status = keyrox_get_status(dev, NULL, NULL, NULL, NULL, NULL, 0);
     keyrox_close(dev);
 
-    if (rc != 0) {
-        // Do NOT call USB Bus Reset on transient query failure; another app/GUI could be accessing the HID interface.
-        static int consecutiveQueryFailures = 0;
-        consecutiveQueryFailures++;
-        if (consecutiveQueryFailures <= 2) {
-            logMessage("[~] Temporary status query contention (rc=%d, attempt %d/3)", rc, consecutiveQueryFailures);
-        } else if (consecutiveQueryFailures == 3) {
-            logMessage("[!] Consecutive status query failures (rc=%d). Retrying on next cycle.", rc);
+    if (status != 0) {
+        gKeyboardConnected = NO;
+        if (consecutiveFailures < 3) consecutiveFailures++;
+        if (consecutiveFailures >= 3 && !recoveryAttempted && keyrox_usb_is_present()) {
+            recoveryAttempted = YES;
+            if (reviveKeyboard("consecutive HID failures") == 0) {
+                consecutiveFailures = 0;
+                recoveryAttempted = NO;
+                gKeyboardConnected = YES;
+                if (!gDisplayIsSleeping) restoreBacklightAfterWake();
+            }
         }
         return;
     }
 
-    if (!gKeyboardConnected) {
-        logMessage("[+] Keyrox TKL connected! (FW: %s, Profile: %u, Mode: %s, Brightness: %u)",
-                   fw[0] ? fw : "GK8911M",
-                   profile,
-                   keyrox_mode_to_string(mode),
-                   bright);
-        gKeyboardConnected = YES;
-        if (bright > 0) {
-            gSavedBrightness = bright;
-        }
-    } else if (gDisplayIsSleeping) {
-        logMessage("🌙 [Screen Asleep] Heartbeat OK: Keyrox TKL responsive (FW: %s)", fw[0] ? fw : "GK8911M");
-    }
+    consecutiveFailures = 0;
+    recoveryAttempted = NO;
+    if (!gKeyboardConnected) logMessage("Keyrox HID is responding");
+    gKeyboardConnected = YES;
+    if (!gDisplayIsSleeping) restoreBacklightAfterWake();
 }
 
 static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument) {
@@ -184,9 +152,7 @@ static void signalHandler(int sig) {
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc > 1 && (strcmp(argv[1], "--revive") == 0 || strcmp(argv[1], "-r") == 0)) {
-            reviveKeyboard("CLI manual trigger");
-            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.2]];
-            return 0;
+            return reviveKeyboard("CLI manual trigger") == 0 ? 0 : 1;
         }
 
         // Initialize NSApplication for Cocoa/WindowServer event delivery
@@ -204,13 +170,17 @@ int main(int argc, const char *argv[]) {
 
         // Register for IODisplayWrangler hardware power notifications (kernel-level)
         IONotificationPortRef notifyPort = IONotificationPortCreate(kIOMainPortDefault);
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), IONotificationPortGetRunLoopSource(notifyPort), kCFRunLoopDefaultMode);
+        if (notifyPort) {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), IONotificationPortGetRunLoopSource(notifyPort), kCFRunLoopDefaultMode);
+        }
 
         io_service_t wrangler = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IODisplayWrangler"));
         if (wrangler) {
-            IOServiceAddInterestNotification(notifyPort, wrangler, kIOGeneralInterest, DisplayWranglerCallback, NULL, &gDisplayWranglerNotifier);
+            if (notifyPort && IOServiceAddInterestNotification(notifyPort, wrangler, kIOGeneralInterest,
+                                                              DisplayWranglerCallback, NULL, &gDisplayWranglerNotifier) == kIOReturnSuccess) {
+                logMessage("IODisplayWrangler kernel power listener registered");
+            }
             IOObjectRelease(wrangler);
-            logMessage("[+] IODisplayWrangler kernel power listener registered");
         }
 
         // Also register Cocoa NSWorkspace notifications

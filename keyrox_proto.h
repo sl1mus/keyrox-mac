@@ -18,14 +18,14 @@
 #define KEYROX_CMD_DEV_INFO      0x01
 #define KEYROX_CMD_CONFIG        0x02
 #define KEYROX_CMD_CAPS          0x03
-#define KEYROX_CMD_PROFILE       0x04
+#define KEYROX_CMD_EFFECT        0x04
 #define KEYROX_CMD_CUSTOM_LED    0x05
 #define KEYROX_CMD_SPEED_BRIGHT  0x06
 #define KEYROX_CMD_REMAP         0x07
-#define KEYROX_CMD_MODE          0x08
 #define KEYROX_CMD_SAVE          0x09
 #define KEYROX_CMD_MACRO         0x0A
-#define KEYROX_CMD_MATRIX_STREAM 0xB0
+#define KEYROX_MATRIX_FRAME_LENGTH 0x01b0
+#define KEYROX_NO_PRESET UINT8_MAX
 
 /* Read mask */
 #define KEYROX_CMD_READ_FLAG    0x80
@@ -94,6 +94,8 @@ typedef struct {
 /* Helper functions */
 void keyrox_packet_init(keyrox_packet_t *pkt, uint8_t cmd, uint8_t subcmd, uint32_t offset, const void *data, uint16_t len);
 void keyrox_matrix_packet_init(keyrox_packet_t *pkt, const keyrox_color_t *colors, size_t count);
+int keyrox_mode_to_wire(keyrox_mode_t mode);
+int keyrox_mode_from_wire(uint8_t wire);
 const char *keyrox_mode_to_string(keyrox_mode_t mode);
 int keyrox_string_to_mode(const char *str);
 

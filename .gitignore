@@ -16,6 +16,8 @@ dist/
 
 # User profiles and local configs
 profiles.json
+*.heic
+*.HEIC
 .env
 .idea/
 .vscode/

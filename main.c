@@ -15,7 +15,7 @@ static void print_usage(const char *prog) {
     printf("  %s speed <0..4>              Set lighting animation speed\n", prog);
     printf("  %s color <#RRGGBB|R,G,B>     Set static single color (const mode 0)\n", prog);
     printf("  %s mode-color <mode> <#RGB>  Set foreground color for specific mode\n", prog);
-    printf("  %s reset-modes               Restore factory default colors for all 18 modes\n", prog);
+    printf("  %s reset-modes               Reset hardware effect parameters\n", prog);
     printf("  %s profile <1..5>            Switch active profile\n", prog);
     printf("  %s on                        Turn backlight on (restore PWM, mode preserved)\n", prog);
     printf("  %s off                       Turn backlight off (0%% PWM, mode preserved)\n", prog);
@@ -34,7 +34,8 @@ static void print_usage(const char *prog) {
 static void print_modes(void) {
     printf("Supported Lighting Modes:\n");
     for (int i = 0; i < KEYROX_MODE_COUNT; ++i) {
-        printf("  %2d: %s\n", i, keyrox_mode_to_string((keyrox_mode_t)i));
+        if (i == KEYROX_MODE_OFF || keyrox_mode_to_wire((keyrox_mode_t)i) >= 0)
+            printf("  %2d: %s\n", i, keyrox_mode_to_string((keyrox_mode_t)i));
     }
 }
 
@@ -84,23 +85,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(cmd, "revive") == 0 || strcmp(cmd, "reset-usb") == 0) {
-        printf("[*] Sending hardware USB Bus Reset to Keyrox TKL (1a2c:2511)...\n");
-        if (keyrox_usb_bus_reset() != 0) {
-            fprintf(stderr, "[-] USB Bus Reset failed. Ensure keyboard is physically connected.\n");
-            return 1;
-        }
-        printf("[+] Electrical USB Bus Reset successful! Re-enumerating controller...\n");
-        usleep(600000); /* 600ms for MCU reboot and re-enumeration */
-
-        keyrox_device_t *kdev = keyrox_open();
-        if (kdev) {
-            keyrox_set_mode(kdev, KEYROX_MODE_WAVE, KEYROX_DIR_LEFT);
-            keyrox_set_brightness(kdev, 4);
-            keyrox_close(kdev);
-            printf("[+] Keyboard successfully revived and initialized to Wave mode (Brightness: 4/4)!\n");
-        } else {
-            printf("[!] USB Bus Reset issued. macOS HID driver re-enumerating (test typing now).\n");
-        }
+        printf("[*] Resetting the Keyrox TKL USB connection...\n");
+        if (keyrox_revive() != 0) return 1;
+        printf("[+] Keyrox HID responded after the USB reset.\n");
         return 0;
     }
 
@@ -222,7 +209,7 @@ int main(int argc, char *argv[]) {
         if (keyrox_get_status(dev, &mode, &bright, &speed, &profile, fw, sizeof(fw)) == 0) {
             printf("[+] Keyboard connected:\n");
             printf("    Firmware:   %s\n", fw[0] ? fw : "Unknown (GK8911M)");
-            printf("    Profile:    %d\n", profile + 1);
+            if (profile != KEYROX_NO_PRESET) printf("    Preset:     P%d\n", profile + 1);
             printf("    Mode:       %s (%d)\n", keyrox_mode_to_string(mode), (int)mode);
             printf("    Brightness: %d / 4\n", bright);
             printf("    Speed:      %d / 4\n", speed);
@@ -327,7 +314,7 @@ int main(int argc, char *argv[]) {
                     printf("[*] Setting color for mode %s (%d) to #%02X%02X%02X...\n",
                            keyrox_mode_to_string((keyrox_mode_t)mode_idx), mode_idx, fg_r, fg_g, fg_b);
                     if (keyrox_set_mode_colors(dev, (keyrox_mode_t)mode_idx, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b) == 0) {
-                        printf("[+] Mode color updated and saved\n");
+                        printf("[+] Mode color updated\n");
                     } else {
                         fprintf(stderr, "[-] Failed to set mode color\n");
                         rc = 1;
@@ -336,9 +323,9 @@ int main(int argc, char *argv[]) {
             }
         }
     } else if (strcmp(cmd, "reset-modes") == 0) {
-        printf("[*] Restoring factory default colors for all 18 modes in EEPROM...\n");
+        printf("[*] Resetting hardware effect parameters...\n");
         if (keyrox_restore_default_modes(dev) == 0) {
-            printf("[+] All 18 modes restored to factory defaults and saved to Flash!\n");
+            printf("[+] Effect parameters reset and save command sent\n");
         } else {
             fprintf(stderr, "[-] Failed to restore default modes\n");
             rc = 1;
@@ -390,7 +377,7 @@ int main(int argc, char *argv[]) {
         printf("[+] Running keyrox-ctl watchdog (press Ctrl+C to exit)...\n");
         while (1) {
             uint8_t mode = 0;
-            keyrox_read_packet(dev, KEYROX_CMD_MODE, 0, 0, &mode, 1);
+            keyrox_read_packet(dev, KEYROX_CMD_EFFECT, 0, 0, &mode, 1);
             sleep(30);
         }
     } else {

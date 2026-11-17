@@ -35,14 +35,14 @@ static const keyrox_key_info_t KEYROX_TKL_KEYS[] = {
     { 53, 191, "/" }, { 310, 161, "RightShift" }, { 328, 38, "ArrowUp" },
 
     { 29, 162, "LeftCtrl" }, { 347, 91, "LeftWin" }, { 56, 164, "LeftAlt" },
-    { 57, 32, "Spacebar" }, { 312, 165, "RightAlt" }, { 349, 93, "App" },
+    { 57, 32, "Spacebar" }, { 312, 165, "RightAlt" }, { 0, 0, "Fn" }, { 349, 93, "App" },
     { 285, 163, "RightCtrl" }, { 331, 37, "ArrowLeft" }, { 336, 40, "ArrowDown" }, { 333, 39, "ArrowRight" }
 };
 
 #define KEYROX_TKL_KEY_COUNT (sizeof(KEYROX_TKL_KEYS) / sizeof(KEYROX_TKL_KEYS[0]))
 
-/* Hardware sequence layout for 87 TKL keys in 521-byte matrix streaming reports */
-static const uint8_t KEYROX_LED_POSITIONS[87] = {
+/* Hardware LED positions in 520-byte macOS feature reports, in keyboard order. */
+static const uint8_t KEYROX_LED_POSITIONS[] = {
      0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
     16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,
     37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,  49,  70,  51,  52,  53,
@@ -50,5 +50,8 @@ static const uint8_t KEYROX_LED_POSITIONS[87] = {
     75,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  88,  89,
     94,  95,  96,  98, 100, 101, 102, 103, 104, 105, 106
 };
+
+_Static_assert(KEYROX_TKL_KEY_COUNT == sizeof(KEYROX_LED_POSITIONS) / sizeof(KEYROX_LED_POSITIONS[0]),
+               "Every TKL key must have a hardware LED position");
 
 #endif /* KEYROX_KEYS_H */
