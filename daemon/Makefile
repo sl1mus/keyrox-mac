@@ -1,6 +1,6 @@
 CC = clang
 CFLAGS = -O2 -Wall -Wextra -fobjc-arc
-FRAMEWORKS = -framework Foundation -framework AppKit -framework IOKit -framework IOUSBHost -framework CoreFoundation
+FRAMEWORKS = -framework CoreGraphics -framework Foundation -framework AppKit -framework IOKit -framework IOUSBHost -framework CoreFoundation
 
 ARCH_FLAGS ?=
 

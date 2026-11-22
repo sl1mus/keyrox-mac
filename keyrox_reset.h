@@ -7,21 +7,16 @@
 extern "C" {
 #endif
 
-/**
- * Sends an electrical USB Bus Reset signal to the Keyrox TKL keyboard (1a2c:2511).
- * Forces the GK8911M microcontroller to reboot, clear endpoint stalls,
- * and re-enumerate with macOS kernel without physically unplugging the cable.
- *
- * Returns:
- *   0 on success
- *  -1 if device not found on USB bus
- *  -2 if IOUSBHostDevice initialization failed
- *  -3 if resetWithError returned failure
+/*
+ * Request a reset of the matching Keyrox USB device.
+ * Returns 0 if macOS accepted the reset, -1 for an absent device,
+ * -2 for client creation failure, or -3 if the reset failed.
  */
 int keyrox_usb_bus_reset(void);
+int keyrox_usb_reenumerate(void);
 bool keyrox_usb_is_present(void);
 
-/* Reset and wait for a valid HID response. Returns -4 if the controller stays unresponsive. */
+/* Reset, fall back to USB re-enumeration, and wait for HID. Returns -4 for no HID response. */
 int keyrox_revive(void);
 
 #ifdef __cplusplus

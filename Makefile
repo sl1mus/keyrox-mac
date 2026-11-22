@@ -23,6 +23,8 @@ test:
 	@mkdir -p tests
 	$(CC) $(CFLAGS) -I. tests/test_proto.c keyrox_proto.c -o tests/test_proto
 	@./tests/test_proto
+	$(CC) $(OBJCFLAGS) -I. tests/test_watchdog.m keyrox_reset.m keyrox_hid.c keyrox_proto.c $(LDFLAGS) -framework AppKit -framework CoreGraphics -o tests/test_watchdog
+	@./tests/test_watchdog
 
 $(TARGET): $(OBJ)
 	$(CC) $(OBJ) $(LDFLAGS) -o $@
@@ -38,7 +40,7 @@ universal:
 	$(MAKE) -C daemon universal
 
 clean:
-	rm -f $(OBJ) $(TARGET) tests/test_proto
+	rm -f $(OBJ) $(TARGET) tests/test_proto tests/test_watchdog
 	$(MAKE) -C daemon clean
 	$(MAKE) -C gui clean
 

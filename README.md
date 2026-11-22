@@ -2,7 +2,7 @@
 > **Нативная панель управления и CLI-утилита для клавиатуры Red Square Keyrox TKL под macOS (Apple Silicon & Intel)**
 
 [![macOS](https://img.shields.io/badge/macOS-12.0%2B-blue?logo=apple)](https://apple.com)
-[![Latest Release](https://img.shields.io/badge/Release-v1.0.5-brightgreen?logo=github)](https://github.com/sl1mus/keyrox-mac/releases/tag/v1.0.5)
+[![Latest Release](https://img.shields.io/badge/Release-v1.0.7-brightgreen?logo=github)](https://github.com/sl1mus/keyrox-mac/releases/tag/v1.0.7)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(ARM64%20%2B%20x86__64)-purple)]()
 [![App Size](https://img.shields.io/badge/Size-1.8%20MB%20(DMG)-success)]()
 [![Electron Free](https://img.shields.io/badge/Electron-Free%20(Pure%20Cocoa%20%2B%20IOKit)-orange)]()
@@ -41,7 +41,7 @@
 
 ### 📥 1-Click Install (Готовый DMG)
 Скачайте готовый DMG-образ последней версии:
-- 🍏 **[Keyrox-macOS.dmg (v1.0.5 Universal)](https://github.com/sl1mus/keyrox-mac/releases/download/v1.0.5/Keyrox-macOS.dmg)** (1.8 MB, Apple Silicon M1/M2/M3/M4 + Intel x86_64)
+- 🍏 **[Keyrox-macOS.dmg (v1.0.7 Universal)](https://github.com/sl1mus/keyrox-mac/releases/download/v1.0.7/Keyrox-macOS.dmg)** (1.8 MB, Apple Silicon M1/M2/M3/M4 + Intel x86_64)
 
 ### 1. Требования
 - macOS 12 Monterey, macOS 13 Ventura, macOS 14 Sonoma, macOS 15 Sequoia (или новее).
@@ -66,7 +66,9 @@ open /Applications/Keyrox.app
 
 Обычные эффекты приглушаются до уровня **1 из 4** с восстановлением предыдущей яркости при пробуждении. Уже выключенная подсветка остаётся выключенной. Для приглушения Custom Matrix сначала примените поклавишные цвета в текущей версии приложения.
 
-Проверено на Keyrox TKL V2 (1a2c:2511) под macOS Sonoma. Реальный цикл сна экрана подтвердил яркость **4 → 1 → 4** и сохранение выбранного эффекта. Проверены автоматический перезапуск службы, обработка зависшего запроса и совместные запросы CLI со службой. Восстановление после повторного аппаратного зависания требует дальнейшей проверки на устройстве.
+В версии 1.0.7 приглушение использует события фактического сна и пробуждения экрана с задержкой в одну секунду. Общие переходы питания дисплея больше не запускают смену яркости. Проверка присутствия клавиатуры на USB перенесена в процесс с таймаутом. Если обычный USB-сброс не восстанавливает устройство, применяется запасная повторная регистрация через совместимый USB API.
+
+На Intel iMac с macOS Sonoma через OCLP проверен цикл яркости **4 → 1 → 4**. Пользователь подтвердил сохранение бирюзового свечения после пробуждения. Причина полного исчезновения устройства с USB остаётся предметом диагностики. Если устройство отсутствует на шине, программной повторной регистрации нечего адресовать. Значение яркости эффекта также не отражает аппаратный переключатель подсветки Fn + Esc.
 
 ### 3. Сборка CLI-утилиты
 ```bash

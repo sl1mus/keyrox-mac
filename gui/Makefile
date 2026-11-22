@@ -1,7 +1,7 @@
 CC = clang
 CFLAGS = -O2 -Wall -Wextra -std=c99 -fobjc-arc
 OBJCFLAGS = -O2 -Wall -Wextra -fobjc-arc
-FRAMEWORKS = -framework Cocoa -framework WebKit -framework IOKit -framework CoreFoundation -framework UniformTypeIdentifiers -framework IOUSBHost
+FRAMEWORKS = -framework CoreGraphics -framework Cocoa -framework WebKit -framework IOKit -framework CoreFoundation -framework UniformTypeIdentifiers -framework IOUSBHost
 
 APP_NAME = Keyrox
 BUILD_DIR = build

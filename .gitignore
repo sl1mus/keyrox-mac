@@ -21,3 +21,4 @@ profiles.json
 .env
 .idea/
 .vscode/
+/tests/test_watchdog

@@ -661,8 +661,8 @@
 
     NSDictionary *options = @{
         NSAboutPanelOptionApplicationName: @"Red Square Keyrox TKL",
-        NSAboutPanelOptionApplicationVersion: @"1.0.5",
-        NSAboutPanelOptionVersion: @"v1.0.5 (macOS Universal)",
+        NSAboutPanelOptionApplicationVersion: @"1.0.7",
+        NSAboutPanelOptionVersion: @"v1.0.7 (macOS Universal)",
         @"Copyright": @"Copyright © 2026 keyrox-mac contributors. All rights reserved.",
         NSAboutPanelOptionCredits: credits
     };
@@ -685,7 +685,7 @@
             if (error || (httpResp && httpResp.statusCode == 404)) {
                 NSAlert *alert = [[NSAlert alloc] init];
                 alert.messageText = @"Проверка обновлений Keyrox";
-                alert.informativeText = @"Установлена актуальная версия: v1.0.5 (macOS Universal ARM64/x86_64).\n\n"
+                alert.informativeText = @"Установлена актуальная версия: v1.0.7 (macOS Universal ARM64/x86_64).\n\n"
                                          @"Репозиторий проекта: github.com/sl1mus/keyrox-mac\n"
                                          @"Вы можете открыть страницу релизов на GitHub для просмотра истории и новостей.";
                 [alert addButtonWithTitle:@"Открыть GitHub Релизы"];
@@ -703,7 +703,7 @@
                 NSString *htmlUrl = json[@"html_url"] ?: @"https://github.com/sl1mus/keyrox-mac/releases";
                 NSString *releaseName = json[@"name"] ?: latestTag;
 
-                NSString *currentVer = @"v1.0.5";
+                NSString *currentVer = @"v1.0.7";
                 if ([latestTag length] > 0 && ![latestTag isEqualToString:currentVer]) {
                     NSAlert *alert = [[NSAlert alloc] init];
                     alert.messageText = [NSString stringWithFormat:@"Доступно обновление: %@", latestTag];
@@ -722,7 +722,7 @@
                 }
             } else {
                 NSAlert *alert = [[NSAlert alloc] init];
-                alert.messageText = @"Keyrox Control v1.0.5";
+                alert.messageText = @"Keyrox Control v1.0.7";
                 alert.informativeText = @"Не удалось связаться с сервером обновлений. Проверьте подключение к сети.";
                 [alert addButtonWithTitle:@"ОК"];
                 [alert runModal];

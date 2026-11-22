@@ -1,7 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <IOKit/IOKitLib.h>
-#import <IOKit/IOMessage.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <IOKit/pwr_mgt/IOPMLib.h>
 #import <IOUSBHost/IOUSBHost.h>
 
@@ -20,7 +20,7 @@ static dispatch_source_t gTimer = NULL;
 static BOOL gKeyboardConnected = NO;
 static BOOL gDisplayIsSleeping = NO;
 static BOOL gBrightnessSynchronized = NO;
-static io_object_t gDisplayWranglerNotifier = 0;
+static NSTimeInterval gDisplaySettleUntil = 0;
 
 static void logMessage(const char *format, ...) {
     char timestamp[32] = {0};
@@ -62,8 +62,6 @@ static void releasePowerAssertions(void) {
     }
 }
 
-static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument);
-
 static int reviveKeyboard(const char *reason) {
     logMessage("USB reset requested (%s)", reason);
     int result = keyrox_revive();
@@ -99,39 +97,65 @@ static int runWorker(NSString *argument, NSTimeInterval timeout) {
 }
 
 static void syncDisplayBrightness(void) {
-    if (gBrightnessSynchronized) return;
+    if (gBrightnessSynchronized || NSProcessInfo.processInfo.systemUptime < gDisplaySettleUntil) return;
     NSString *argument = gDisplayIsSleeping ? @"--dim" : @"--restore-brightness";
     if (runWorker(argument, 3) == 0) {
         gBrightnessSynchronized = YES;
-        logMessage("%s", gDisplayIsSleeping ? "Display asleep: backlight dimmed to minimum" :
-                   "Display awake: previous backlight brightness restored");
+        logMessage("%s", gDisplayIsSleeping ? "Display asleep: effect brightness set to minimum" :
+                   "Display awake: saved effect brightness synchronized");
     }
 }
 
-static void displaySleepChanged(BOOL sleeping) {
-    if (gDisplayIsSleeping != sleeping) {
-        gDisplayIsSleeping = sleeping;
-        gBrightnessSynchronized = NO;
+static BOOL displaysAreAsleep(void) {
+    uint32_t count = 0;
+    if (CGGetOnlineDisplayList(0, NULL, &count) != kCGErrorSuccess || count == 0) return NO;
+    CGDirectDisplayID *displays = calloc(count, sizeof(*displays));
+    if (!displays) return NO;
+    BOOL sleeping = NO;
+    if (CGGetOnlineDisplayList(count, displays, &count) == kCGErrorSuccess && count > 0) {
+        sleeping = YES;
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!CGDisplayIsAsleep(displays[i])) {
+                sleeping = NO;
+                break;
+            }
+        }
     }
-    syncDisplayBrightness();
+    free(displays);
+    return sleeping;
+}
+
+static void displaySleepChanged(BOOL sleeping) {
+    if (gDisplayIsSleeping == sleeping) return;
+    gDisplayIsSleeping = sleeping;
+    gBrightnessSynchronized = NO;
+    gDisplaySettleUntil = NSProcessInfo.processInfo.systemUptime + 1;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        syncDisplayBrightness();
+    });
 }
 
 static void checkKeyboardHealth(void) {
     static unsigned consecutiveFailures = 0;
     static NSTimeInterval lastRecovery = -30;
     static NSTimeInterval lastHeartbeat = -60;
+    static int previousStatus = -99;
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
 
-    if (!keyrox_usb_is_present()) {
-        if (gKeyboardConnected) logMessage("Keyboard disappeared from USB; waiting for reconnection");
+    /* Even registry matching can block during removal. Keep it inside the worker. */
+    int status = runWorker(@"--probe", 3);
+    if (status == 2) {
+        if (previousStatus != 2) logMessage("Keyboard absent from USB; waiting for reconnection");
+        previousStatus = status;
         gKeyboardConnected = NO;
+        gBrightnessSynchronized = NO;
         consecutiveFailures = 0;
         return;
     }
-    int status = runWorker(@"--probe", 3);
+    previousStatus = status;
     if (status != 0) {
         gKeyboardConnected = NO;
-        consecutiveFailures++;
+        if (consecutiveFailures < 3) consecutiveFailures++;
         logMessage("HID heartbeat failed (%u consecutive failures)", consecutiveFailures);
         if (consecutiveFailures >= 3 && now - lastRecovery >= 30) {
             lastRecovery = now;
@@ -154,16 +178,6 @@ static void checkKeyboardHealth(void) {
     syncDisplayBrightness();
 }
 
-static void DisplayWranglerCallback(void *refcon, io_service_t service, natural_t messageType, void *messageArgument) {
-    (void)refcon; (void)service; (void)messageArgument;
-    if (messageType == kIOMessageDeviceWillPowerOff) {
-        displaySleepChanged(YES);
-    } else if (messageType == kIOMessageDeviceHasPoweredOn) {
-        displaySleepChanged(NO);
-        checkKeyboardHealth();
-    }
-}
-
 static void signalHandler(int sig) {
     logMessage("Received signal %d; terminating cleanly...", sig);
     if (gTimer) dispatch_source_cancel(gTimer);
@@ -181,6 +195,7 @@ int main(int argc, const char *argv[]) {
             return result == 0 ? 0 : 1;
         }
         if (argc > 1 && strcmp(argv[1], "--probe") == 0) {
+            if (!keyrox_usb_is_present()) return 2;
             keyrox_device_t *dev = keyrox_open();
             int result = keyrox_get_status(dev, NULL, NULL, NULL, NULL, NULL, 0);
             keyrox_close(dev);
@@ -194,7 +209,7 @@ int main(int argc, const char *argv[]) {
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 
-        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.0.5 (bounded heartbeat and automatic USB recovery)");
+        logMessage("Starting Keyrox USB Keep-Alive Watchdog v1.0.7 (bounded heartbeat and automatic USB recovery)");
         logMessage("Target: VID 0x1A2C, PID 0x2511 / 0x1511 (Red Square Keyrox TKL)");
         logMessage("Heartbeat every 5 seconds; recovery after 3 failures; retry cooldown 30 seconds");
 
@@ -203,32 +218,10 @@ int main(int argc, const char *argv[]) {
 
         createPowerAssertions();
 
-        // Register for IODisplayWrangler hardware power notifications (kernel-level)
-        IONotificationPortRef notifyPort = IONotificationPortCreate(kIOMainPortDefault);
-        if (notifyPort) {
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), IONotificationPortGetRunLoopSource(notifyPort), kCFRunLoopDefaultMode);
-        }
+        // Use actual screen sleep/wake notifications. Generic power transitions
+        // also occur while a display is awake and must not drive keyboard dimming.
+        gDisplayIsSleeping = displaysAreAsleep();
 
-        io_service_t wrangler = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IODisplayWrangler"));
-        if (wrangler) {
-            CFTypeRef power = IORegistryEntryCreateCFProperty(wrangler, CFSTR("IOPowerManagement"), kCFAllocatorDefault, 0);
-            if (power && CFGetTypeID(power) == CFDictionaryGetTypeID()) {
-                CFNumberRef value = CFDictionaryGetValue((CFDictionaryRef)power, CFSTR("CurrentPowerState"));
-                int state = 4;
-                if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
-                    CFNumberGetValue(value, kCFNumberIntType, &state);
-                    gDisplayIsSleeping = state < 4;
-                }
-            }
-            if (power) CFRelease(power);
-            if (notifyPort && IOServiceAddInterestNotification(notifyPort, wrangler, kIOGeneralInterest,
-                                                              DisplayWranglerCallback, NULL, &gDisplayWranglerNotifier) == kIOReturnSuccess) {
-                logMessage("IODisplayWrangler kernel power listener registered");
-            }
-            IOObjectRelease(wrangler);
-        }
-
-        // Also register Cocoa NSWorkspace notifications
         NSNotificationCenter *wsCenter = [[NSWorkspace sharedWorkspace] notificationCenter];
 
         [wsCenter addObserverForName:NSWorkspaceScreensDidSleepNotification
@@ -254,7 +247,8 @@ int main(int argc, const char *argv[]) {
                                queue:[NSOperationQueue mainQueue]
                           usingBlock:^(NSNotification *note) {
             (void)note;
-            logMessage("💻 System woke up (NSWorkspaceDidWakeNotification)");
+            logMessage("System woke up (NSWorkspaceDidWakeNotification)");
+            displaySleepChanged(displaysAreAsleep());
             createPowerAssertions();
             checkKeyboardHealth();
         }];
